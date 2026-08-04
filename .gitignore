@@ -1,0 +1,25 @@
+# --- Data too large for GitHub (>100 MB) — keep LOCAL only ---
+data/population/mys_ppp_2020_UNadj.tif
+
+# The app only needs these committed (all < 5 MB):
+#   data/towers_penang/502.csv
+#   data/population/penang_ppp_2020.tif
+#   data/villages/penang_places.geojson
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# --- Streamlit / build artifacts ---
+outputs/
+*.html
+.streamlit/secrets.toml
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
