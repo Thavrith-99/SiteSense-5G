@@ -27,6 +27,10 @@ streamlit run app.py
 
 Python 3.11+ (developed on 3.14).
 
+## Live demo
+
+https://sitesense-5g-mvp-kxs59yiiiouymaaipuyvb7.streamlit.app/
+
 ## Project layout
 
 | File | Role |
