@@ -7,12 +7,14 @@ Every layer below is tagged by whether it is usable *inside the Penang pilot*.
 
 | Folder / file | Source | Rows/extent | Role | Status |
 |---|---|---|---|---|
-| `towers_penang/502.csv` | OpenCelliD Malaysia (MCC 502) | 5,284 Penang cells (3,450 GSM · 1,832 LTE · 2 UMTS · **0 NR**) | Tower locations + `range` (coverage proxy) + `samples` (load proxy) | ✅ in use (Fn 1 & 2) |
-| `population/penang_ppp_2020.tif` | WorldPop MYS 2020, UN-adjusted, 100 m (clipped) | 600×600 px, **2,200,402 people** | People per pixel → uncovered population | ✅ ready (0.70 MB) via `data_prep/clip_worldpop.py` |
+| `towers_penang/502.csv` | OpenCelliD Malaysia (MCC 502) | 5,284 Penang-bbox cells → **2,187 on the island** (1,241 GSM · 944 LTE · 2 UMTS · **0 NR**) | Tower locations + `range` (coverage proxy) + `samples` (load proxy). App filters to the island polygon at load. | ✅ in use (Fn 1 & 2) |
+| `boundaries/penang_island.geojson` | OSM Nominatim (island polygon) | Penang Island MultiPolygon | Clips population/villages/towers to the island | ✅ ready via `data_prep/fetch_penang_boundary.py` |
+| `population/penang_island_ppp_2020.tif` | WorldPop MYS 2020 clipped to island | 206×272 px, **793,788 people** | People per pixel → uncovered population (**app uses this**) | ✅ ready via `data_prep/clip_to_island.py` |
+| `population/penang_ppp_2020.tif` | WorldPop MYS 2020 bbox clip | 600×600 px, 2,200,402 people (island+mainland) | superseded by island clip | ⚠️ kept as intermediate |
 | `population/mys_ppp_2020_UNadj.tif` | WorldPop MYS 2020 national | 157 MB | source raster (git-ignore; do NOT commit) | ⚠️ keep local only |
-| `villages/penang_places.geojson` | OSM Overpass | **536 points** (63 village, 244 hamlet, 16 town, 159 neighbourhood, 49 suburb, 5 city) | Kampung/place points → villages out of coverage | ✅ ready via `data_prep/fetch_osm_villages.py` |
-| `boundaries/` | GADM / HDX Malaysia admin (to collect) | — | Penang island + district outline for clipping & context | ⬜ TODO |
-| `terrain/` | Google Earth Engine SRTM/Copernicus DEM (to collect) | — | Slope/elevation → buildability of candidate sites | ⬜ TODO (Fn 3, optional Aug) |
+| `villages/penang_places_island.geojson` | OSM places clipped to island | **80 points** (of 536 in bbox) | Kampung/place points → villages out of coverage (**app uses this**) | ✅ ready via `data_prep/clip_to_island.py` |
+| `villages/penang_places.geojson` | OSM Overpass (bbox) | 536 points | superseded by island clip | ⚠️ kept as intermediate |
+| `terrain/` | SRTM DEM (no GEE needed) or GEE Copernicus | — | Slope/elevation → buildability of candidate sites | ⬜ TODO (Fn 3, optional) |
 
 ## ⚠️ Malaysian but NOT Penang (optional / stretch module)
 

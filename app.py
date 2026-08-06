@@ -38,13 +38,14 @@ import recommend as rec
 APP_DIR = Path(__file__).resolve().parent
 DATA = APP_DIR / "data"
 CSV = DATA / "towers_penang" / "502.csv"
-POP_TIF = DATA / "population" / "penang_ppp_2020.tif"
-PLACES_GEOJSON = DATA / "villages" / "penang_places.geojson"
+POP_TIF = DATA / "population" / "penang_island_ppp_2020.tif"
+PLACES_GEOJSON = DATA / "villages" / "penang_places_island.geojson"
+BOUNDARY = DATA / "boundaries" / "penang_island.geojson"
 
 # --- Penang Island bounding box (from project notes) ----------------------
 LAT_MIN, LAT_MAX = 5.1, 5.6
 LON_MIN, LON_MAX = 100.1, 100.6
-PENANG_CENTER = [5.35, 100.30]
+PENANG_CENTER = [5.37, 100.27]  # Penang Island centroid
 
 RADIO_META = {
     "NR":   ("5G NR",   "#e53935"),   # red   - the ones we care about
@@ -59,12 +60,21 @@ RADIO_META = {
 # --------------------------------------------------------------------------
 @st.cache_data(show_spinner=False)
 def load_penang_towers() -> pd.DataFrame:
-    """Load OpenCelliD Malaysia cells and clip to the Penang Island bbox."""
+    """Load OpenCelliD Malaysia cells and clip to the Penang Island polygon."""
+    import json
+    from shapely.geometry import shape, Point
+    from shapely.prepared import prep
+
     df = pd.read_csv(CSV)
     penang = df[
         df["lat"].between(LAT_MIN, LAT_MAX)
         & df["lon"].between(LON_MIN, LON_MAX)
     ].copy()
+    # keep only cells on Penang Island (drops mainland Seberang Perai)
+    poly = prep(shape(json.loads(BOUNDARY.read_text(encoding="utf-8"))
+                      ["features"][0]["geometry"]))
+    inside = [poly.contains(Point(x, y)) for x, y in zip(penang["lon"], penang["lat"])]
+    penang = penang[inside].copy()
     penang["label"] = penang["radio"].map(lambda r: RADIO_META.get(r, (r, ""))[0])
     return penang
 
