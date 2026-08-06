@@ -6,17 +6,19 @@ A GeoAI decision-support dashboard that fuses tower locations, network load,
 population and place data to answer one question for any district:
 **where should the next 5G tower go?**
 
-Pilot area: **Penang Island, Malaysia.**
+Pilot area: **Penang, Malaysia** — with a live scope switch between the full
+**Penang State** (island + mainland) and **Penang Island**.
 
 ## What it does
 
 1. **See the network** — every mobile cell on an interactive map.
 2. **Find the coverage gap** — population and villages outside 4G/5G coverage.
-   *Penang Island: ~56,600 people and 10 kampungs out of broadband coverage.*
+   *Penang State: ~77,400 people and 31 kampungs out of broadband coverage
+   (Penang Island drill-down: ~56,600 people, 10 kampungs).*
 3. **Flag overloaded towers** — cells carrying an unusually high load.
 4. **Recommend new 5G sites** — a ranked, non-overlapping shortlist from a
    greedy maximum-coverage model, each with an explainable "people gained" score.
-   *Top 5 sites (1 km range) close ~62% of the gap.*
+   *Top 5 sites (1 km range) close ~48% of the State gap (~62% for the island).*
 
 ## Run locally
 
@@ -60,9 +62,9 @@ drive-test set reserved for an optional signal model).
   local metre-per-degree scaling calibrated to Penang's latitude.
 - Penang currently has **zero 5G NR cells** in the open data, so the tool frames
   the problem as a **greenfield 5G build-out** on top of the 4G footprint.
-- Population and villages are clipped to the **Penang Island boundary** (from
-  OpenStreetMap), so counts reflect the island pilot (~793,788 people), not the
-  mainland. Towers are likewise filtered to the island.
+- Population, villages and towers are clipped to the selected **scope polygon**
+  (from OpenStreetMap): **Penang State** (~1,746,105 people) or **Penang Island**
+  (~793,788). The sidebar switches between them and everything recomputes.
 
 ## Deploy (Streamlit Community Cloud)
 

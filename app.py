@@ -38,14 +38,28 @@ import recommend as rec
 APP_DIR = Path(__file__).resolve().parent
 DATA = APP_DIR / "data"
 CSV = DATA / "towers_penang" / "502.csv"
-POP_TIF = DATA / "population" / "penang_island_ppp_2020.tif"
-PLACES_GEOJSON = DATA / "villages" / "penang_places_island.geojson"
-BOUNDARY = DATA / "boundaries" / "penang_island.geojson"
 
-# --- Penang Island bounding box (from project notes) ----------------------
+# --- Study-area scopes (the sidebar switches between these) ----------------
+SCOPES = {
+    "Penang State": {
+        "boundary": DATA / "boundaries" / "penang_state.geojson",
+        "pop": DATA / "population" / "penang_state_ppp_2020.tif",
+        "places": DATA / "villages" / "penang_places_state.geojson",
+        "center": [5.30, 100.40], "zoom": 11,
+        "note": "island + mainland Seberang Perai",
+    },
+    "Penang Island": {
+        "boundary": DATA / "boundaries" / "penang_island.geojson",
+        "pop": DATA / "population" / "penang_island_ppp_2020.tif",
+        "places": DATA / "villages" / "penang_places_island.geojson",
+        "center": [5.37, 100.27], "zoom": 12,
+        "note": "island only",
+    },
+}
+
+# --- Penang bounding box (coarse pre-filter before the polygon clip) -------
 LAT_MIN, LAT_MAX = 5.1, 5.6
 LON_MIN, LON_MAX = 100.1, 100.6
-PENANG_CENTER = [5.37, 100.27]  # Penang Island centroid
 
 RADIO_META = {
     "NR":   ("5G NR",   "#e53935"),   # red   - the ones we care about
@@ -59,8 +73,8 @@ RADIO_META = {
 # Data layer
 # --------------------------------------------------------------------------
 @st.cache_data(show_spinner=False)
-def load_penang_towers() -> pd.DataFrame:
-    """Load OpenCelliD Malaysia cells and clip to the Penang Island polygon."""
+def load_towers(scope: str) -> pd.DataFrame:
+    """Load OpenCelliD Malaysia cells and clip to the chosen scope polygon."""
     import json
     from shapely.geometry import shape, Point
     from shapely.prepared import prep
@@ -70,8 +84,7 @@ def load_penang_towers() -> pd.DataFrame:
         df["lat"].between(LAT_MIN, LAT_MAX)
         & df["lon"].between(LON_MIN, LON_MAX)
     ].copy()
-    # keep only cells on Penang Island (drops mainland Seberang Perai)
-    poly = prep(shape(json.loads(BOUNDARY.read_text(encoding="utf-8"))
+    poly = prep(shape(json.loads(SCOPES[scope]["boundary"].read_text(encoding="utf-8"))
                       ["features"][0]["geometry"]))
     inside = [poly.contains(Point(x, y)) for x, y in zip(penang["lon"], penang["lat"])]
     penang = penang[inside].copy()
@@ -80,39 +93,41 @@ def load_penang_towers() -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner=False)
-def load_population():
-    return cov.load_population(POP_TIF)
+def load_population(scope: str):
+    return cov.load_population(SCOPES[scope]["pop"])
 
 
 @st.cache_data(show_spinner=False)
-def load_places():
-    return cov.load_places(PLACES_GEOJSON)
+def load_places(scope: str):
+    return cov.load_places(SCOPES[scope]["places"])
 
 
 @st.cache_data(show_spinner="Computing coverage gap…")
-def compute_gap(picked_key: tuple, max_range: int):
+def compute_gap(scope: str, picked_key: tuple, max_range: int):
     """Function 1 — coverage gap for the currently-filtered towers."""
+    df = load_towers(scope)
     sub = df[df["radio"].isin(picked_key) & (df["range"] <= max_range)]
-    pop, transform = load_population()
-    places = load_places()
+    pop, transform = load_population(scope)
+    places = load_places(scope)
     return cov.coverage_gap(
         pop, transform, places,
         sub["lon"].values, sub["lat"].values, sub["range"].values,
-        PENANG_CENTER[0],
+        SCOPES[scope]["center"][0],
     )
 
 
 @st.cache_data(show_spinner="Scoring candidate sites…")
-def compute_sites(picked_key: tuple, max_range: int, load_p: int,
+def compute_sites(scope: str, picked_key: tuple, max_range: int, load_p: int,
                   new_range: int, n_sites: int):
     """Function 3 — greedy max-coverage new-5G-tower recommendations."""
+    df = load_towers(scope)
     sub = df[df["radio"].isin(picked_key) & (df["range"] <= max_range)]
-    pop, transform = load_population()
-    g = compute_gap(picked_key, max_range)
+    pop, transform = load_population(scope)
+    g = compute_gap(scope, picked_key, max_range)
     thr = df["samples"].quantile(load_p / 100.0)
     ov = sub[sub["samples"] >= thr]
     return rec.recommend_sites(
-        pop, g["coverage_mask"], transform, PENANG_CENTER[0],
+        pop, g["coverage_mask"], transform, SCOPES[scope]["center"][0],
         new_range, n_sites, ov["lon"].values, ov["lat"].values,
     )
 
@@ -171,14 +186,21 @@ if not CSV.exists():
     st.error(f"Cannot find 502.csv at:\n{CSV}")
     st.stop()
 
-df = load_penang_towers()
-
 # --------------------------------------------------------------------------
-# Sidebar - filters (Function inputs)
+# Sidebar - scope + filters (Function inputs)
 # --------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("## 📡 SiteSense 5G")
-    st.caption("GeoAI tower-siting & 5G coverage-gap planner · Penang Island")
+    st.caption("GeoAI tower-siting & 5G coverage-gap planner")
+    st.divider()
+
+    scope = st.radio(
+        "Study area", list(SCOPES.keys()), index=0,
+        help="Switch between the full Penang State (island + mainland "
+             "Seberang Perai) and Penang Island only.",
+    )
+    st.caption(f"Scope: {SCOPES[scope]['note']}")
+    df = load_towers(scope)
     st.divider()
 
     st.markdown("### Filters")
@@ -236,18 +258,19 @@ n_4g = int((fdf["radio"] == "LTE").sum())
 n_overloaded = len(overloaded)
 
 # --- Function 1: coverage gap (people + villages out of coverage) ---------
-gap = compute_gap(tuple(sorted(picked)), int(max_range))
-places = load_places()
+gap = compute_gap(scope, tuple(sorted(picked)), int(max_range))
+places = load_places(scope)
 
 # --- Function 3: recommended new-5G-tower sites ---------------------------
-sites = compute_sites(tuple(sorted(picked)), int(max_range), int(load_p),
+sites = compute_sites(scope, tuple(sorted(picked)), int(max_range), int(load_p),
                       int(new_range), int(n_sites))
 
 # --------------------------------------------------------------------------
 # Header + KPI row
 # --------------------------------------------------------------------------
 st.markdown("### SiteSense 5G — Coverage & Site-Selection Overview")
-st.caption("Penang Island pilot · fuse towers + signal + population + terrain → where the next 5G tower goes")
+st.caption(f"{scope} pilot ({SCOPES[scope]['note']}) · fuse towers + signal + "
+           "population + terrain → where the next 5G tower goes")
 
 k1, k2, k3, k4 = st.columns(4)
 kpi_card(k1, "Cells in view", f"{n_towers:,}", f"{n_4g:,} × 4G · {n_5g:,} × 5G")
@@ -266,13 +289,15 @@ st.write("")
 map_col, panel_col = st.columns([3, 1], gap="medium")
 
 with map_col:
+    _center = SCOPES[scope]["center"]
+    _zoom = SCOPES[scope]["zoom"]
     if HAVE_LEAFMAP:
-        m = leafmap.Map(center=PENANG_CENTER, zoom=12,
+        m = leafmap.Map(center=_center, zoom=_zoom,
                         draw_control=False, measure_control=False,
                         fullscreen_control=True)
         m.add_basemap("CartoDB.Positron")
     else:
-        m = folium.Map(location=PENANG_CENTER, zoom_start=12, tiles="cartodbpositron")
+        m = folium.Map(location=_center, zoom_start=_zoom, tiles="cartodbpositron")
 
     import folium as _folium  # available via either path
     for radio in ["GSM", "UMTS", "LTE", "NR"]:  # draw important ones last (on top)
@@ -377,7 +402,7 @@ with panel_col:
         f'<div style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
         f'{gap["uncovered_pop"]:,.0f}</div>'
         f'<div style="color:#8b96a5;font-size:.78rem">people out of coverage · '
-        f'{100 - gap["pct_covered"]:.1f}% of Penang</div>'
+        f'{100 - gap["pct_covered"]:.1f}% of {scope}</div>'
         f'<div style="margin-top:8px;color:#ff9800">● {gap["n_uncovered_places"]} '
         f'villages/kampungs uncovered</div></div>',
         unsafe_allow_html=True,

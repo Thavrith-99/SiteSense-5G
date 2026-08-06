@@ -7,13 +7,16 @@ Every layer below is tagged by whether it is usable *inside the Penang pilot*.
 
 | Folder / file | Source | Rows/extent | Role | Status |
 |---|---|---|---|---|
-| `towers_penang/502.csv` | OpenCelliD Malaysia (MCC 502) | 5,284 Penang-bbox cells → **2,187 on the island** (1,241 GSM · 944 LTE · 2 UMTS · **0 NR**) | Tower locations + `range` (coverage proxy) + `samples` (load proxy). App filters to the island polygon at load. | ✅ in use (Fn 1 & 2) |
-| `boundaries/penang_island.geojson` | OSM Nominatim (island polygon) | Penang Island MultiPolygon | Clips population/villages/towers to the island | ✅ ready via `data_prep/fetch_penang_boundary.py` |
-| `population/penang_island_ppp_2020.tif` | WorldPop MYS 2020 clipped to island | 206×272 px, **793,788 people** | People per pixel → uncovered population (**app uses this**) | ✅ ready via `data_prep/clip_to_island.py` |
-| `population/penang_ppp_2020.tif` | WorldPop MYS 2020 bbox clip | 600×600 px, 2,200,402 people (island+mainland) | superseded by island clip | ⚠️ kept as intermediate |
+| `towers_penang/502.csv` | OpenCelliD Malaysia (MCC 502) | 5,284 bbox → **4,643 in state** (2,895 GSM · 1,746 LTE · 2 UMTS · 0 NR) / **2,187 on island** (944 LTE) | Tower locations + `range` + `samples`. App filters to the **selected scope** polygon at load. | ✅ in use (Fn 1 & 2) |
+| `boundaries/penang_state.geojson` | OSM Nominatim (state admin polygon) | Penang State MultiPolygon (island + Seberang Perai) | Clips to full state (**default scope**) | ✅ via `data_prep/fetch_penang_boundary.py` |
+| `boundaries/penang_island.geojson` | OSM Nominatim (island polygon) | Penang Island MultiPolygon | Clips to island (drill-down scope) | ✅ via `data_prep/fetch_penang_boundary.py` |
+| `population/penang_state_ppp_2020.tif` | WorldPop 2020 clipped to state | 452×557 px, **1,746,105 people** | Uncovered population — **State scope** | ✅ via `data_prep/clip_to_state.py` |
+| `population/penang_island_ppp_2020.tif` | WorldPop 2020 clipped to island | 206×272 px, **793,788 people** | Uncovered population — Island scope | ✅ via `data_prep/clip_to_island.py` |
+| `population/penang_ppp_2020.tif` | WorldPop 2020 bbox clip | 600×600 px, 2,200,402 (incl. Kedah spill) | intermediate — source for both scope clips | ⚠️ kept as intermediate |
 | `population/mys_ppp_2020_UNadj.tif` | WorldPop MYS 2020 national | 157 MB | source raster (git-ignore; do NOT commit) | ⚠️ keep local only |
-| `villages/penang_places_island.geojson` | OSM places clipped to island | **80 points** (of 536 in bbox) | Kampung/place points → villages out of coverage (**app uses this**) | ✅ ready via `data_prep/clip_to_island.py` |
-| `villages/penang_places.geojson` | OSM Overpass (bbox) | 536 points | superseded by island clip | ⚠️ kept as intermediate |
+| `villages/penang_places_state.geojson` | OSM places clipped to state | **366 points** | Villages out of coverage — State scope | ✅ via `data_prep/clip_to_state.py` |
+| `villages/penang_places_island.geojson` | OSM places clipped to island | **80 points** | Villages out of coverage — Island scope | ✅ via `data_prep/clip_to_island.py` |
+| `villages/penang_places.geojson` | OSM Overpass (bbox) | 536 points | intermediate — source for both scope clips | ⚠️ kept as intermediate |
 | `terrain/` | SRTM DEM (no GEE needed) or GEE Copernicus | — | Slope/elevation → buildability of candidate sites | ⬜ TODO (Fn 3, optional) |
 
 ## ⚠️ Malaysian but NOT Penang (optional / stretch module)
