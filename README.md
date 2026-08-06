@@ -60,8 +60,11 @@ drive-test set reserved for an optional signal model).
 
 - Coverage uses each cell's reported `range` as its footprint; distances use a
   local metre-per-degree scaling calibrated to Penang's latitude.
-- Penang currently has **zero 5G NR cells** in the open data, so the tool frames
-  the problem as a **greenfield 5G build-out** on top of the 4G footprint.
+- The open (OpenCelliD) data shows **zero 5G NR cells** in Penang — a data-coverage
+  limitation (crowdsourced data under-captures 5G NR), not that Penang lacks 5G
+  (real 5G exists via Malaysia's DNB network). The tool therefore plans **greenfield
+  5G placement** from the 4G footprint, and works on an operator's real 5G inventory
+  when supplied.
 - Population, villages and towers are clipped to the selected **scope polygon**
   (from OpenStreetMap): **Penang State** (~1,746,105 people) or **Penang Island**
   (~793,788). The sidebar switches between them and everything recomputes.

@@ -145,7 +145,10 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-      .block-container { padding-top: 1.2rem; padding-bottom: 1rem; }
+      .block-container { padding-top: 2.6rem; padding-bottom: 1rem; }
+      .app-title { font-size: 1.55rem; font-weight: 700; line-height: 1.45;
+        color: #f1f4f8; margin: 0 0 2px 0; padding-top: 4px; }
+      .app-sub { color: #8b96a5; font-size: 0.85rem; margin: 0 0 10px 0; }
       .kpi-card {
         background: #11151c; border: 1px solid #232a36; border-radius: 12px;
         padding: 14px 16px; height: 100%;
@@ -268,9 +271,12 @@ sites = compute_sites(scope, tuple(sorted(picked)), int(max_range), int(load_p),
 # --------------------------------------------------------------------------
 # Header + KPI row
 # --------------------------------------------------------------------------
-st.markdown("### SiteSense 5G — Coverage & Site-Selection Overview")
-st.caption(f"{scope} pilot ({SCOPES[scope]['note']}) · fuse towers + signal + "
-           "population + terrain → where the next 5G tower goes")
+st.markdown(
+    f'<div class="app-title">SiteSense 5G — Coverage &amp; Site-Selection Overview</div>'
+    f'<div class="app-sub">{scope} pilot ({SCOPES[scope]["note"]}) · fuse towers + '
+    f'signal + population + terrain → where the next 5G tower goes</div>',
+    unsafe_allow_html=True,
+)
 
 k1, k2, k3, k4 = st.columns(4)
 kpi_card(k1, "Cells in view", f"{n_towers:,}", f"{n_4g:,} × 4G · {n_5g:,} × 5G")
