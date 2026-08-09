@@ -62,11 +62,38 @@ LAT_MIN, LAT_MAX = 5.1, 5.6
 LON_MIN, LON_MAX = 100.1, 100.6
 
 RADIO_META = {
-    "NR":   ("5G NR",   "#e53935"),   # red   - the ones we care about
+    "NR":   ("5G NR",   "#e53935"),   # red    - the ones we care about
     "LTE":  ("4G LTE",  "#1e88e5"),   # blue
-    "UMTS": ("3G UMTS", "#ffb300"),   # amber
+    "UMTS": ("3G UMTS", "#9c27b0"),   # purple
     "GSM":  ("2G GSM",  "#9e9e9e"),   # grey
 }
+
+# --- On-map legend (matches team-reviewed design: 7-item network legend) ---
+LEGEND_HTML = """
+<div style="
+    position: fixed; bottom: 26px; right: 26px; z-index: 9999;
+    background: rgba(17,21,28,0.92); border: 1px solid #232a36; border-radius: 12px;
+    padding: 12px 15px; font-family: 'Source Sans Pro', sans-serif;
+    color: #f1f4f8; font-size: 12.5px; line-height: 1.7;
+    box-shadow: 0 2px 12px rgba(0,0,0,.45);
+">
+  <div style="font-weight:700; margin-bottom:6px; color:#cfd6e0;">Network Legend</div>
+  <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;
+       background:#e53935;margin-right:8px;"></span>5G NR</div>
+  <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;
+       background:#1e88e5;margin-right:8px;"></span>4G LTE</div>
+  <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;
+       background:#9c27b0;margin-right:8px;"></span>3G UMTS</div>
+  <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;
+       background:#9e9e9e;margin-right:8px;"></span>2G GSM</div>
+  <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;
+       background:transparent;border:2px solid #ff1744;margin-right:8px;"></span>Overloaded Tower</div>
+  <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;
+       background:#ff9800;margin-right:8px;"></span>Uncovered Village</div>
+  <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;
+       background:#00c853;margin-right:8px;"></span>New 5G Site</div>
+</div>
+"""
 
 
 # --------------------------------------------------------------------------
@@ -306,6 +333,7 @@ with map_col:
         m = folium.Map(location=_center, zoom_start=_zoom, tiles="cartodbpositron")
 
     import folium as _folium  # available via either path
+    m.get_root().html.add_child(_folium.Element(LEGEND_HTML))
     for radio in ["GSM", "UMTS", "LTE", "NR"]:  # draw important ones last (on top)
         sub = fdf[fdf["radio"] == radio]
         if sub.empty:
@@ -320,9 +348,7 @@ with map_col:
                 ).add_to(m)
             _folium.CircleMarker(
                 location=[r["lat"], r["lon"]],
-                radius=5 if is_hot else 3,
-                color="#ff1744" if is_hot else color,
-                weight=2 if is_hot else 1,
+                radius=3, color=color, weight=1,
                 fill=True, fill_opacity=0.9,
                 popup=_folium.Popup(
                     f"<b>{label}</b>"
@@ -333,6 +359,15 @@ with map_col:
                     max_width=240,
                 ),
             ).add_to(m)
+            if is_hot:
+                # Hollow red ring on top, matching the "Overloaded Tower" legend
+                # swatch exactly — keeps the base dot's generation colour visible
+                # instead of overwriting it with solid red.
+                _folium.CircleMarker(
+                    location=[r["lat"], r["lon"]],
+                    radius=8, color="#ff1744", weight=2,
+                    fill=False, opacity=0.95,
+                ).add_to(m)
 
     # Function 1 — mark the villages/places that fall outside all coverage
     if show_gaps:
@@ -376,7 +411,7 @@ with map_col:
                 ),
             ).add_to(m)
 
-    st_folium(m, use_container_width=True, height=560, returned_objects=[])
+    st_folium(m, use_container_width=True, height=820, returned_objects=[])
 
 with panel_col:
     # --- Status ---
@@ -392,15 +427,11 @@ with panel_col:
         unsafe_allow_html=True,
     )
 
-    # --- Flagged / overloaded towers (Function 2) ---
-    st.markdown('<div class="panel"><h4>⚠️ Flagged towers</h4>', unsafe_allow_html=True)
-    if n_overloaded:
-        top = overloaded.nlargest(8, "samples")[["label", "samples", "range", "cell"]]
-        top = top.rename(columns={"label": "type", "samples": "load", "range": "range_m"})
-        st.dataframe(top, hide_index=True, width="stretch", height=230)
-    else:
-        st.caption("No towers above the load threshold in the current filter.")
-    st.markdown("</div>", unsafe_allow_html=True)
+    # NOTE: a separate "Flagged towers" detail table used to live here
+    # (Function 2). Removed as redundant for the live pitch — the overloaded
+    # count is already shown above (Status panel "hot" count) and in the
+    # "Overloaded towers" KPI card, and per-site relief is called out in the
+    # AI Insights panel below ("relieves N overloaded tower(s)").
 
     # --- Coverage gap (Function 1) ---
     st.markdown(
