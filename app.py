@@ -2,11 +2,13 @@
 SiteSense 5G - GeoAI decision-support dashboard
 Team Neural Shield (KH-002) - ASEAN GeoAI Fusion 2026
 
-A Streamlit + Leafmap dashboard that fuses tower locations, signal KPIs,
-population and terrain to:
-  (1) map current coverage and quantify people / kampungs out of coverage;
+A Streamlit + Leafmap dashboard that fuses tower locations, population and
+settlement data to:
+  (1) map estimated coverage and quantify people / kampungs in estimated
+      underserved areas (coverage is a range-based OpenCelliD proxy, not
+      verified operator coverage);
   (2) flag overloaded or underperforming towers;
-  (3) recommend the best location for a new 5G tower.
+  (3) recommend preliminary locations for a new 5G tower.
 
 Run locally:
     py -m streamlit run app.py
@@ -89,9 +91,9 @@ LEGEND_HTML = """
   <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;
        background:transparent;border:2px solid #ff1744;margin-right:8px;"></span>Overloaded Tower</div>
   <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;
-       background:#ff9800;margin-right:8px;"></span>Uncovered Village</div>
+       background:#ff9800;margin-right:8px;"></span>Est. Underserved Village</div>
   <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;
-       background:#00c853;margin-right:8px;"></span>New 5G Site</div>
+       background:#00c853;margin-right:8px;"></span>Preliminary 5G Site</div>
 </div>
 """
 
@@ -151,7 +153,7 @@ def compute_sites(scope: str, picked_key: tuple, max_range: int, load_p: int,
     sub = df[df["radio"].isin(picked_key) & (df["range"] <= max_range)]
     pop, transform = load_population(scope)
     g = compute_gap(scope, picked_key, max_range)
-    thr = df["samples"].quantile(load_p / 100.0)
+    thr = sub["samples"].quantile(load_p / 100.0)
     ov = sub[sub["samples"] >= thr]
     return rec.recommend_sites(
         pop, g["coverage_mask"], transform, SCOPES[scope]["center"][0],
@@ -258,14 +260,16 @@ with st.sidebar:
 
     show_coverage = st.checkbox("Show coverage footprints", value=False,
                                 help="Draw each cell's range as a circle (slower).")
-    show_gaps = st.checkbox("Show uncovered villages", value=True,
-                            help="Mark OSM places outside all coverage footprints.")
+    show_gaps = st.checkbox("Show estimated underserved villages", value=True,
+                            help="Marks OSM places outside every tower's estimated coverage "
+                                 "footprint (OpenCelliD reported range) — not verified operator "
+                                 "coverage data.")
 
-    st.markdown("### New-site recommendations")
+    st.markdown("### Preliminary new-site recommendations")
     new_range = st.slider("New 5G tower range (m)", 300, 3000, 1000, step=100,
                           help="Assumed coverage radius of a new 5G tower.")
     n_sites = st.slider("Sites to recommend", 1, 15, 5)
-    show_sites = st.checkbox("Show recommended sites", value=True)
+    show_sites = st.checkbox("Show preliminary recommended sites", value=True)
 
     st.divider()
     st.caption(
@@ -278,7 +282,7 @@ with st.sidebar:
 # --------------------------------------------------------------------------
 fdf = df[df["radio"].isin(picked) & (df["range"] <= max_range)].copy()
 
-load_threshold = df["samples"].quantile(load_p / 100.0)
+load_threshold = fdf["samples"].quantile(load_p / 100.0)
 fdf["overloaded"] = fdf["samples"] >= load_threshold
 overloaded = fdf[fdf["overloaded"]]
 
@@ -287,7 +291,7 @@ n_5g = int((fdf["radio"] == "NR").sum())
 n_4g = int((fdf["radio"] == "LTE").sum())
 n_overloaded = len(overloaded)
 
-# --- Function 1: coverage gap (people + villages out of coverage) ---------
+# --- Function 1: estimated coverage gap (people + villages underserved) --
 gap = compute_gap(scope, tuple(sorted(picked)), int(max_range))
 places = load_places(scope)
 
@@ -301,15 +305,16 @@ sites = compute_sites(scope, tuple(sorted(picked)), int(max_range), int(load_p),
 st.markdown(
     f'<div class="app-title">SiteSense 5G — Coverage &amp; Site-Selection Overview</div>'
     f'<div class="app-sub">{scope} pilot ({SCOPES[scope]["note"]}) · fuse towers + '
-    f'signal + population + terrain → where the next 5G tower goes</div>',
+    f'population + settlements → an estimated coverage gap and preliminary new-site picks '
+    f'(not verified operator coverage)</div>',
     unsafe_allow_html=True,
 )
 
 k1, k2, k3, k4 = st.columns(4)
 kpi_card(k1, "Cells in view", f"{n_towers:,}", f"{n_4g:,} × 4G · {n_5g:,} × 5G")
-kpi_card(k2, "People out of coverage", f"{gap['uncovered_pop']:,.0f}",
-         f"{gap['pct_covered']:.1f}% of {gap['total_pop']:,.0f} covered")
-kpi_card(k3, "Kampungs uncovered", f"{gap['n_uncovered_places']:,}",
+kpi_card(k2, "Est. people underserved", f"{gap['uncovered_pop']:,.0f}",
+         f"{gap['pct_covered']:.1f}% of {gap['total_pop']:,.0f} est. covered")
+kpi_card(k3, "Kampungs — est. underserved", f"{gap['n_uncovered_places']:,}",
          f"of {gap['n_places']:,} OSM places in view")
 kpi_card(k4, "Overloaded towers", f"{n_overloaded:,}",
          f"≥ {load_p}th pct load ({int(load_threshold)} samples)")
@@ -382,7 +387,7 @@ with map_col:
                 fill=True, fill_color="#ff9800", fill_opacity=0.95,
                 popup=_folium.Popup(
                     f"<b>{nm or '(unnamed)'}</b><br>{pl}<br>"
-                    f"<span style='color:#e65100'>OUT OF 4G/5G COVERAGE</span>",
+                    f"<span style='color:#e65100'>ESTIMATED UNDERSERVED (4G/5G)</span>",
                     max_width=220,
                 ),
             ).add_to(m)
@@ -403,8 +408,8 @@ with map_col:
                     f'box-shadow:0 0 4px rgba(0,0,0,.5)">{s["rank"]}</div>'
                 )),
                 popup=_folium.Popup(
-                    f"<b>Recommended 5G site #{s['rank']}</b><br>"
-                    f"+{s['people_gained']:,.0f} people covered<br>"
+                    f"<b>Preliminary 5G site #{s['rank']}</b><br>"
+                    f"+{s['people_gained']:,.0f} people in estimated new coverage<br>"
                     f"relieves {s['overloaded_relieved']} overloaded tower(s)<br>"
                     f"<span style='color:#666'>{s['lat']:.4f}, {s['lon']:.4f}</span>",
                     max_width=250,
@@ -435,19 +440,22 @@ with panel_col:
 
     # --- Coverage gap (Function 1) ---
     st.markdown(
-        f'<div class="panel"><h4>📶 Coverage gap (4G/5G)</h4>'
+        f'<div class="panel"><h4>📶 Estimated coverage gap (4G/5G)</h4>'
         f'<div style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
         f'{gap["uncovered_pop"]:,.0f}</div>'
-        f'<div style="color:#8b96a5;font-size:.78rem">people out of coverage · '
+        f'<div style="color:#8b96a5;font-size:.78rem">people in estimated underserved areas · '
         f'{100 - gap["pct_covered"]:.1f}% of {scope}</div>'
         f'<div style="margin-top:8px;color:#ff9800">● {gap["n_uncovered_places"]} '
-        f'villages/kampungs uncovered</div></div>',
+        f'villages/kampungs — estimated underserved</div>'
+        f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'
+        f'Estimated from each cell\'s reported OpenCelliD range, not verified operator '
+        f'coverage data.</div></div>',
         unsafe_allow_html=True,
     )
     if gap["n_uncovered_places"]:
         uncov = ~gap["villages_covered_mask"]
         names = [n for n in np.asarray(places["name"])[uncov] if n]
-        with st.expander(f"List {gap['n_uncovered_places']} uncovered places"):
+        with st.expander(f"List {gap['n_uncovered_places']} estimated underserved places"):
             st.write(", ".join(sorted(names)) or "(unnamed places only)")
 
     # --- AI insight (Function 3: recommended sites) ---
@@ -465,23 +473,24 @@ with panel_col:
             for s in sites
         )
         st.markdown(
-            f'<div class="panel"><h4>💡 AI Insights — recommended 5G sites</h4>'
+            f'<div class="panel"><h4>💡 AI Insights — preliminary 5G site recommendations</h4>'
             f'<div class="ai-insight">Building these <b>{len(sites)}</b> towers '
-            f'(range {new_range} m) would cover <b>{covered_total:,.0f}</b> of the '
-            f'{gap["uncovered_pop"]:,.0f} uncovered people (<b>{pct_gap:.0f}%</b> of the gap).'
+            f'(range {new_range} m) would reach an estimated <b>{covered_total:,.0f}</b> of the '
+            f'{gap["uncovered_pop"]:,.0f} people in estimated underserved areas '
+            f'(<b>{pct_gap:.0f}%</b> of the gap).'
             f'<div style="margin-top:8px">{rows}</div></div></div>',
             unsafe_allow_html=True,
         )
     else:
         st.markdown(
             '<div class="panel"><h4>💡 AI Insights</h4>'
-            '<div class="ai-insight">No coverage gap to close in the current '
-            'filter — everyone is covered.</div></div>',
+            '<div class="ai-insight">No estimated coverage gap to close in the current '
+            'filter.</div></div>',
             unsafe_allow_html=True,
         )
 
 st.caption(
-    "Function 1 (uncovered population/kampungs) ✓ · Function 2 (overloaded flags) ✓ "
+    "Function 1 (estimated underserved population/kampungs) ✓ · Function 2 (overloaded flags) ✓ "
     "· Function 3 (greedy max-coverage new-5G-site recommendations) ✓ — all live. "
     "MVP complete."
 )
