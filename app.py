@@ -316,8 +316,11 @@ kpi_card(k2, "Est. people underserved", f"{gap['uncovered_pop']:,.0f}",
          f"{gap['pct_covered']:.1f}% of {gap['total_pop']:,.0f} est. covered")
 kpi_card(k3, "Kampungs — est. underserved", f"{gap['n_uncovered_places']:,}",
          f"of {gap['n_places']:,} OSM places in view")
-kpi_card(k4, "Overloaded towers", f"{n_overloaded:,}",
-         f"≥ {load_p}th pct load ({int(load_threshold)} samples)")
+overloaded_sub = (
+    f"≥ {load_p}th pct load ({int(load_threshold)} samples)"
+    if n_towers else "no cells match the current filter"
+)
+kpi_card(k4, "Overloaded towers", f"{n_overloaded:,}", overloaded_sub)
 
 st.write("")
 
