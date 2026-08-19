@@ -1,5 +1,9 @@
-# --- Data too large for GitHub (>100 MB) — keep LOCAL only ---
+# --- Raw/intermediate data not needed by the app — keep LOCAL only ---
+# (re-fetchable via data_prep/fetch_srtm_slope.py; only the small resampled
+# penang_{state,island}_slope.tif outputs are actually used/committed)
 data/population/mys_ppp_2020_UNadj.tif
+data/terrain/N05E100.hgt
+data/terrain/N05E100.hgt.gz
 
 # The app only needs these committed (all < 5 MB):
 #   data/towers_penang/502.csv
@@ -10,6 +14,7 @@ data/population/mys_ppp_2020_UNadj.tif
 __pycache__/
 *.py[cod]
 .venv/
+.venv-ml/
 venv/
 env/
 

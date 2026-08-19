@@ -35,40 +35,28 @@ from streamlit_folium import st_folium
 
 import coverage as cov
 import recommend as rec
+import data_access as da
 
-# --- Paths ----------------------------------------------------------------
-APP_DIR = Path(__file__).resolve().parent
-DATA = APP_DIR / "data"
-CSV = DATA / "towers_penang" / "502.csv"
+# --- Paths + scopes ---------------------------------------------------------
+# The data layer (towers/population/villages/coverage-gap/site-recommendation
+# loading, PostGIS-with-file-fallback) lives in data_access.py so the FastAPI
+# service (api/main.py) can reuse the exact same logic instead of a second
+# copy. app.py only adds Streamlit's @st.cache_data around it below.
+APP_DIR = da.APP_DIR
+CSV = da.CSV
+SCOPES = da.SCOPES
+RADIO_META = da.RADIO_META
 
-# --- Study-area scopes (the sidebar switches between these) ----------------
-SCOPES = {
-    "Penang State": {
-        "boundary": DATA / "boundaries" / "penang_state.geojson",
-        "pop": DATA / "population" / "penang_state_ppp_2020.tif",
-        "places": DATA / "villages" / "penang_places_state.geojson",
-        "center": [5.30, 100.40], "zoom": 11,
-        "note": "island + mainland Seberang Perai",
-    },
-    "Penang Island": {
-        "boundary": DATA / "boundaries" / "penang_island.geojson",
-        "pop": DATA / "population" / "penang_island_ppp_2020.tif",
-        "places": DATA / "villages" / "penang_places_island.geojson",
-        "center": [5.37, 100.27], "zoom": 12,
-        "note": "island only",
-    },
-}
-
-# --- Penang bounding box (coarse pre-filter before the polygon clip) -------
-LAT_MIN, LAT_MAX = 5.1, 5.6
-LON_MIN, LON_MAX = 100.1, 100.6
-
-RADIO_META = {
-    "NR":   ("5G NR",   "#e53935"),   # red    - the ones we care about
-    "LTE":  ("4G LTE",  "#1e88e5"),   # blue
-    "UMTS": ("3G UMTS", "#9c27b0"),   # purple
-    "GSM":  ("2G GSM",  "#9e9e9e"),   # grey
-}
+# --- FastAPI service URL (api/main.py's /predict-rsrp demo) ----------------
+# Same override pattern as db.py's DATABASE_URL: env var, then st.secrets,
+# then a localhost default for local dev.
+import os as _os
+LSTM_API_URL = _os.environ.get("LSTM_API_URL")
+if not LSTM_API_URL:
+    try:
+        LSTM_API_URL = st.secrets["LSTM_API_URL"]
+    except Exception:
+        LSTM_API_URL = "http://127.0.0.1:8001"
 
 # --- On-map legend (matches team-reviewed design: 7-item network legend) ---
 LEGEND_HTML = """
@@ -101,64 +89,15 @@ LEGEND_HTML = """
 # --------------------------------------------------------------------------
 # Data layer
 # --------------------------------------------------------------------------
-@st.cache_data(show_spinner=False)
-def load_towers(scope: str) -> pd.DataFrame:
-    """Load OpenCelliD Malaysia cells and clip to the chosen scope polygon."""
-    import json
-    from shapely.geometry import shape, Point
-    from shapely.prepared import prep
-
-    df = pd.read_csv(CSV)
-    penang = df[
-        df["lat"].between(LAT_MIN, LAT_MAX)
-        & df["lon"].between(LON_MIN, LON_MAX)
-    ].copy()
-    poly = prep(shape(json.loads(SCOPES[scope]["boundary"].read_text(encoding="utf-8"))
-                      ["features"][0]["geometry"]))
-    inside = [poly.contains(Point(x, y)) for x, y in zip(penang["lon"], penang["lat"])]
-    penang = penang[inside].copy()
-    penang["label"] = penang["radio"].map(lambda r: RADIO_META.get(r, (r, ""))[0])
-    return penang
-
-
-@st.cache_data(show_spinner=False)
-def load_population(scope: str):
-    return cov.load_population(SCOPES[scope]["pop"])
-
-
-@st.cache_data(show_spinner=False)
-def load_places(scope: str):
-    return cov.load_places(SCOPES[scope]["places"])
-
-
-@st.cache_data(show_spinner="Computing coverage gap…")
-def compute_gap(scope: str, picked_key: tuple, max_range: int):
-    """Function 1 — coverage gap for the currently-filtered towers."""
-    df = load_towers(scope)
-    sub = df[df["radio"].isin(picked_key) & (df["range"] <= max_range)]
-    pop, transform = load_population(scope)
-    places = load_places(scope)
-    return cov.coverage_gap(
-        pop, transform, places,
-        sub["lon"].values, sub["lat"].values, sub["range"].values,
-        SCOPES[scope]["center"][0],
-    )
-
-
-@st.cache_data(show_spinner="Scoring candidate sites…")
-def compute_sites(scope: str, picked_key: tuple, max_range: int, load_p: int,
-                  new_range: int, n_sites: int):
-    """Function 3 — greedy max-coverage new-5G-tower recommendations."""
-    df = load_towers(scope)
-    sub = df[df["radio"].isin(picked_key) & (df["range"] <= max_range)]
-    pop, transform = load_population(scope)
-    g = compute_gap(scope, picked_key, max_range)
-    thr = sub["samples"].quantile(load_p / 100.0)
-    ov = sub[sub["samples"] >= thr]
-    return rec.recommend_sites(
-        pop, g["coverage_mask"], transform, SCOPES[scope]["center"][0],
-        new_range, n_sites, ov["lon"].values, ov["lat"].values,
-    )
+# Thin @st.cache_data wrappers around data_access.py's framework-agnostic
+# functions — the actual loading/PostGIS-fallback/algorithm logic lives
+# there so api/main.py (FastAPI) can call the same code, not a copy.
+load_towers = st.cache_data(show_spinner=False)(da.load_towers)
+_using_db = st.cache_data(show_spinner=False)(da.using_db)
+load_population = st.cache_data(show_spinner=False)(da.load_population)
+load_places = st.cache_data(show_spinner=False)(da.load_places)
+compute_gap = st.cache_data(show_spinner="Computing coverage gap…")(da.compute_gap)
+compute_sites = st.cache_data(show_spinner="Scoring candidate sites…")(da.compute_sites)
 
 
 # --------------------------------------------------------------------------
@@ -181,6 +120,7 @@ st.markdown(
       .kpi-card {
         background: #11151c; border: 1px solid #232a36; border-radius: 12px;
         padding: 14px 16px; height: 100%;
+        box-shadow: 0 2px 8px rgba(0,0,0,.25);
       }
       .kpi-label { color: #8b96a5; font-size: 0.78rem; text-transform: uppercase;
         letter-spacing: .04em; margin-bottom: 4px; }
@@ -189,6 +129,7 @@ st.markdown(
       .panel {
         background: #11151c; border: 1px solid #232a36; border-radius: 12px;
         padding: 14px 16px; margin-bottom: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,.25);
       }
       .panel h4 { margin: 0 0 8px 0; font-size: 0.9rem; color: #cfd6e0; }
       .ai-insight {
@@ -196,18 +137,61 @@ st.markdown(
         padding: 12px 14px; color: #bfe8d8; font-size: 0.85rem;
       }
       .todo { color: #d9a441; }
+
+      /* --- Network-health donut (ANDROMEDA reference) --- */
+      .donut-row { display: flex; align-items: center; gap: 16px; margin-top: 10px; }
+      .donut { width: 78px; height: 78px; border-radius: 50%; flex-shrink: 0; position: relative; }
+      .donut::after {
+        content: ""; position: absolute; inset: 11px; border-radius: 50%; background: #11151c;
+      }
+      .donut-legend { font-size: .74rem; color: #b7c0cc; line-height: 1.9; }
+      .donut-legend b { color: #f1f4f8; }
+      .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+
+      /* --- Site-score gradient bar (Stanfield Land reference) --- */
+      .score-bar {
+        position: relative; height: 6px; border-radius: 3px; margin: 5px 0 3px 0;
+        background: linear-gradient(90deg, #ff1744 0%, #ff9800 50%, #00e676 100%);
+      }
+      .score-marker {
+        position: absolute; top: -3px; width: 3px; height: 12px; border-radius: 1px;
+        background: #ffffff; box-shadow: 0 0 4px rgba(0,0,0,.7);
+      }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 
-def kpi_card(col, label: str, value: str, sub: str = "") -> None:
+def kpi_card(col, label: str, value: str, sub: str = "", icon: str = "") -> None:
+    prefix = f'{icon}&nbsp;' if icon else ""
     col.markdown(
-        f'<div class="kpi-card"><div class="kpi-label">{label}</div>'
+        f'<div class="kpi-card"><div class="kpi-label">{prefix}{label}</div>'
         f'<div class="kpi-value">{value}</div>'
         f'<div class="kpi-sub">{sub}</div></div>',
         unsafe_allow_html=True,
+    )
+
+
+def donut_widget(good: int, warn: int, err: int) -> str:
+    """CSS-only conic-gradient donut (no charting library), health-breakdown
+    style borrowed from the ANDROMEDA dashboard reference."""
+    total = max(1, good + warn + err)
+    p_good = good / total * 100
+    p_warn = warn / total * 100
+    gradient = (
+        f"conic-gradient(#00e676 0% {p_good:.1f}%, "
+        f"#ff9800 {p_good:.1f}% {p_good + p_warn:.1f}%, "
+        f"#ff1744 {p_good + p_warn:.1f}% 100%)"
+    )
+    return (
+        f'<div class="donut-row">'
+        f'<div class="donut" style="background:{gradient}"></div>'
+        f'<div class="donut-legend">'
+        f'<span class="dot" style="background:#00e676"></span>good <b>{good:,}</b><br>'
+        f'<span class="dot" style="background:#ff9800"></span>warning <b>{warn:,}</b><br>'
+        f'<span class="dot" style="background:#ff1744"></span>error <b>{err:,}</b>'
+        f'</div></div>'
     )
 
 
@@ -232,6 +216,7 @@ with st.sidebar:
              "Seberang Perai) and Penang Island only.",
     )
     st.caption(f"Scope: {SCOPES[scope]['note']}")
+    st.caption(f"Data source: {'🟢 PostGIS' if _using_db() else '📁 local files'}")
     df = load_towers(scope)
     st.divider()
 
@@ -266,6 +251,23 @@ with st.sidebar:
                                  "coverage data.")
 
     st.markdown("### Preliminary new-site recommendations")
+    weight_profile = st.selectbox(
+        "Site-scoring profile", list(rec.WEIGHT_PROFILES.keys()), index=0,
+        help="Weighted multi-criteria scoring (population reached, backhaul "
+             "proximity to existing towers, overloaded-tower relief). "
+             "'Coverage-first' reproduces the original population-only ranking. "
+             "Weights are team-set/expert-judgement, not learned from data.",
+    )
+    with st.expander("Profile weights"):
+        w = rec.WEIGHT_PROFILES[weight_profile]
+        st.write(f"Population reached: **{w['population']:.0%}** · "
+                f"Backhaul proximity: **{w['backhaul']:.0%}** · "
+                f"Overload relief: **{w['overload']:.0%}** · "
+                f"Slope penalty: **{w['slope']:.0%}**")
+        st.caption("Backhaul proximity to an existing tower is used as a rough cost "
+                  "proxy above the ranking; each site's estimated capex (below) uses "
+                  "a real cited industry benchmark instead. Slope uses real SRTM "
+                  "elevation data. Weights are team-set/expert-judgement, not learned.")
     new_range = st.slider("New 5G tower range (m)", 300, 3000, 1000, step=100,
                           help="Assumed coverage radius of a new 5G tower.")
     n_sites = st.slider("Sites to recommend", 1, 15, 5)
@@ -297,7 +299,7 @@ places = load_places(scope)
 
 # --- Function 3: recommended new-5G-tower sites ---------------------------
 sites = compute_sites(scope, tuple(sorted(picked)), int(max_range), int(load_p),
-                      int(new_range), int(n_sites))
+                      int(new_range), int(n_sites), weight_profile)
 
 # --------------------------------------------------------------------------
 # Header + KPI row
@@ -311,16 +313,16 @@ st.markdown(
 )
 
 k1, k2, k3, k4 = st.columns(4)
-kpi_card(k1, "Cells in view", f"{n_towers:,}", f"{n_4g:,} × 4G · {n_5g:,} × 5G")
+kpi_card(k1, "Cells in view", f"{n_towers:,}", f"{n_4g:,} × 4G · {n_5g:,} × 5G", icon="📡")
 kpi_card(k2, "Est. people underserved", f"{gap['uncovered_pop']:,.0f}",
-         f"{gap['pct_covered']:.1f}% of {gap['total_pop']:,.0f} est. covered")
+         f"{gap['pct_covered']:.1f}% of {gap['total_pop']:,.0f} est. covered", icon="👥")
 kpi_card(k3, "Kampungs — est. underserved", f"{gap['n_uncovered_places']:,}",
-         f"of {gap['n_places']:,} OSM places in view")
+         f"of {gap['n_places']:,} OSM places in view", icon="🏘️")
 overloaded_sub = (
     f"≥ {load_p}th pct load ({int(load_threshold)} samples)"
     if n_towers else "no cells match the current filter"
 )
-kpi_card(k4, "Overloaded towers", f"{n_overloaded:,}", overloaded_sub)
+kpi_card(k4, "Overloaded towers", f"{n_overloaded:,}", overloaded_sub, icon="🔥")
 
 st.write("")
 
@@ -422,7 +424,16 @@ with map_col:
     st_folium(m, use_container_width=True, height=820, returned_objects=[])
 
 with panel_col:
-    # --- Status ---
+    # --- Status (network-health donut, ANDROMEDA-style) ---
+    # "Good" = under the overload threshold; "Warning" = overloaded but under
+    # 2x threshold; "Error" = severely overloaded (>= 2x threshold) — reuses
+    # the same load_threshold Function 2 already computes, just bucketed.
+    if n_towers:
+        n_error = int((fdf["samples"] >= load_threshold * 2).sum())
+        n_warning = n_overloaded - n_error
+        n_good = n_towers - n_overloaded
+    else:
+        n_good = n_warning = n_error = 0
     st.markdown(
         f'<div class="panel"><h4>Status</h4>'
         f'<div style="color:#8b96a5;font-size:.8rem">Cells in view</div>'
@@ -431,7 +442,12 @@ with panel_col:
         f'<span style="color:#1e88e5">● 4G {n_4g:,}</span>&nbsp;&nbsp;'
         f'<span style="color:#e53935">● 5G {n_5g:,}</span>&nbsp;&nbsp;'
         f'<span style="color:#ff1744">● hot {n_overloaded:,}</span>'
-        f'</div></div>',
+        f'</div>'
+        f'{donut_widget(n_good, n_warning, n_error)}'
+        f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'
+        f'Health = load vs. the {load_p}th-percentile overload threshold '
+        f'(warning &lt; 2× · error ≥ 2×).</div>'
+        f'</div>',
         unsafe_allow_html=True,
     )
 
@@ -465,23 +481,43 @@ with panel_col:
     if sites:
         covered_total = sites[-1]["cumulative_gained"]
         pct_gap = covered_total / gap["uncovered_pop"] * 100 if gap["uncovered_pop"] else 0
+        PHASE_COLOR = {1: "#00e676", 2: "#ff9800", 3: "#7f8a99"}
         rows = "".join(
             f'<div style="margin:6px 0;padding-bottom:6px;'
             f'border-bottom:1px solid #1c3b32">'
             f'<b style="color:#00e676">#{s["rank"]}</b> '
+            f'<span style="color:{PHASE_COLOR.get(s.get("phase"), "#7f8a99")};font-size:.72rem;'
+            f'border:1px solid currentColor;border-radius:4px;padding:0 4px;margin-left:4px">'
+            f'Phase {s.get("phase", "?")}</span>'
+            f'<div class="score-bar"><div class="score-marker" '
+            f'style="left:{max(0.0, min(1.0, s.get("score", 0.0))) * 100:.1f}%"></div></div>'
             f'+{s["people_gained"]:,.0f} people'
             f'{f" · relieves {s['overloaded_relieved']} overloaded" if s["overloaded_relieved"] else ""}'
+            f'{f" · {s['backhaul_distance_m']:,.0f} m to nearest existing tower" if s.get("backhaul_distance_m") is not None else ""}'
+            f'{f" · {s['slope_deg']:.1f}° slope" if s.get("slope_deg") is not None else ""}'
+            f'<br><span style="color:#8b96a5;font-size:.72rem">'
+            f'est. ${s["est_capex_usd"]:,.0f} · {s["people_per_1000usd"]:.1f} people per $1,000</span>'
             f'<br><span style="color:#7f8a99;font-size:.75rem">'
             f'{s["lat"]:.4f}, {s["lon"]:.4f}</span></div>'
             for s in sites
         )
+        total_cost = sum(s["est_capex_usd"] for s in sites)
         st.markdown(
             f'<div class="panel"><h4>💡 AI Insights — preliminary 5G site recommendations</h4>'
             f'<div class="ai-insight">Building these <b>{len(sites)}</b> towers '
-            f'(range {new_range} m) would reach an estimated <b>{covered_total:,.0f}</b> of the '
-            f'{gap["uncovered_pop"]:,.0f} people in estimated underserved areas '
-            f'(<b>{pct_gap:.0f}%</b> of the gap).'
-            f'<div style="margin-top:8px">{rows}</div></div></div>',
+            f'(range {new_range} m, <b>{weight_profile}</b> profile, est. total capex '
+            f'<b>${total_cost:,.0f}</b>) would reach an estimated '
+            f'<b>{covered_total:,.0f}</b> of the {gap["uncovered_pop"]:,.0f} people in estimated '
+            f'underserved areas (<b>{pct_gap:.0f}%</b> of the gap).'
+            f'<div style="margin-top:8px">{rows}</div>'
+            f'<div style="margin-top:8px;color:#5b6472;font-size:.68rem;font-style:italic">'
+            f'Weighted multi-criteria score (population reached · backhaul proximity to existing '
+            f'towers · overload relief · SRTM slope penalty) — weights are team-set/expert-judgement, '
+            f'not learned from data. Capex = $150k base + $62.5k/km backhaul fiber (industry '
+            f'benchmark, PatentPC 2026 — order-of-magnitude estimate, not a site-specific quote). '
+            f'Phase = rollout order by cost-efficiency (people reached per dollar), not selection '
+            f'rank. Slope is a buildability proxy, not a full RF propagation model.'
+            f'</div></div></div>',
             unsafe_allow_html=True,
         )
     else:
@@ -491,6 +527,79 @@ with panel_col:
             'filter.</div></div>',
             unsafe_allow_html=True,
         )
+
+    # --- Bonus: LSTM network-trend demo, real Penang data ------------------
+    # Calls the separate FastAPI service over HTTP (not in-process) — the
+    # Streamlit app stays free of the heavy TensorFlow dependency, matching
+    # the finale's Streamlit-frontend / FastAPI-service split. Trained on
+    # real Penang tile history (Ookla Open Data, quarterly) — no
+    # KL-transfer-learning caveat needed, this model has actually seen
+    # Penang. See ml/train_lstm_penang.py for the KL-vs-Penang mapping.
+    st.markdown('<div class="panel"><h4>🧠 LSTM Network-Trend Demo (Penang, real data)</h4>',
+               unsafe_allow_html=True)
+    st.caption("Deployable ML pipeline demo — predicts next quarter's average mobile "
+              "download throughput for a real Penang map tile from its last 4 quarters "
+              "of real measurements (Ookla Open Data). Separate FastAPI service, not "
+              "part of the coverage/site-recommendation logic above.")
+    if st.button("▶ Run sample Penang prediction", key="lstm_penang_btn"):
+        try:
+            import requests
+            base = LSTM_API_URL
+            sample = requests.get(f"{base}/sample-request-penang", timeout=5).json()
+            resp = requests.post(f"{base}/predict-penang-network",
+                                 json={"observations": sample["observations"]}, timeout=15)
+            resp.raise_for_status()
+            r = resp.json()
+            actual = sample.get("actual_next_avg_d_kbps")
+            actual_line = (f'<div style="color:#8b96a5;font-size:.78rem;margin-top:2px">'
+                          f'actual next quarter: {actual/1000:.1f} Mbps</div>' if actual else "")
+            st.markdown(
+                f'<div style="margin-top:4px">'
+                f'<span style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
+                f'{r["predicted_mbps"]} Mbps</span>&nbsp;&nbsp;'
+                f'<span style="color:#00e676">● predicted download</span>'
+                f'{actual_line}'
+                f'<div style="color:#8b96a5;font-size:.78rem;margin-top:4px">'
+                f'tile {sample["quadkey"]} · {r["response_time_ms"]:.0f} ms · {r["model_version"]}</div>'
+                f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'
+                f'{r["note"]}</div></div>',
+                unsafe_allow_html=True,
+            )
+        except Exception as e:
+            st.warning(
+                f"LSTM API not reachable at {LSTM_API_URL} ({e}). Start it with:\n\n"
+                f"`.venv-ml/Scripts/python.exe -m uvicorn api.main:app --port 8001`"
+            )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- Earlier experiment, kept for reference: KL-trained RSRP LSTM ------
+    with st.expander("Earlier experiment: KL-trained signal-quality LSTM"):
+        st.caption("Kept for reference — trained on Kuala Lumpur drive-test data "
+                  "before real Penang time-series data (above) was found. Predicts "
+                  "next RSRP from 10 prior per-second observations. NOT Penang data.")
+        if st.button("▶ Run sample KL prediction", key="lstm_kl_btn"):
+            try:
+                import requests
+                base = LSTM_API_URL
+                sample = requests.get(f"{base}/sample-request", timeout=5).json()
+                resp = requests.post(f"{base}/predict-rsrp", json=sample, timeout=15)
+                resp.raise_for_status()
+                r = resp.json()
+                cls_color = {"Good": "#00e676", "Weak": "#ff9800", "Poor": "#ff1744"}.get(r["signal_class"], "#8b96a5")
+                st.markdown(
+                    f'<div style="margin-top:4px">'
+                    f'<span style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
+                    f'{r["predicted_rsrp_dbm"]} dBm</span>&nbsp;&nbsp;'
+                    f'<span style="color:{cls_color}">● {r["signal_class"]}</span>'
+                    f'<div style="color:#8b96a5;font-size:.78rem;margin-top:4px">'
+                    f'at {r["latitude"]:.4f}, {r["longitude"]:.4f} · '
+                    f'{r["response_time_ms"]:.0f} ms · {r["model_version"]}</div>'
+                    f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'
+                    f'{r["caveat"]}</div></div>',
+                    unsafe_allow_html=True,
+                )
+            except Exception as e:
+                st.warning(f"LSTM API not reachable at {LSTM_API_URL} ({e}).")
 
 st.caption(
     "Function 1 (estimated underserved population/kampungs) ✓ · Function 2 (overloaded flags) ✓ "

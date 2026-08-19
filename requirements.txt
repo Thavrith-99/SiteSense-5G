@@ -11,3 +11,9 @@ pandas>=2.1               # tested 3.0.5
 numpy>=1.26               # tested 2.5.1
 rasterio>=1.3             # tested 1.5.0   (WorldPop raster)
 shapely>=2.0             # tested 2.1.2
+requests>=2.31            # calls the FastAPI /predict-rsrp demo panel over HTTP
+
+# --- PostGIS migration (Physical Finale, db.py / data_prep/load_postgis.py) -
+# Not imported by app.py yet, so this does not affect the deployed
+# Streamlit Cloud app. Needed only to run the loader / future FastAPI layer.
+psycopg2-binary>=2.9
