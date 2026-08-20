@@ -329,7 +329,7 @@ st.write("")
 # --------------------------------------------------------------------------
 # Main: map (left) + status panel (right)
 # --------------------------------------------------------------------------
-map_col, panel_col = st.columns([3, 1], gap="medium")
+map_col, panel_col = st.columns([2.1, 1], gap="medium")
 
 with map_col:
     _center = SCOPES[scope]["center"]
@@ -541,7 +541,7 @@ with panel_col:
               "download throughput for a real Penang map tile from its last 4 quarters "
               "of real measurements (Ookla Open Data). Separate FastAPI service, not "
               "part of the coverage/site-recommendation logic above.")
-    if st.button("▶ Run sample Penang prediction", key="lstm_penang_btn"):
+    if st.button("▶ Run Penang prediction", key="lstm_penang_btn"):
         try:
             import requests
             base = LSTM_API_URL
@@ -572,34 +572,12 @@ with panel_col:
             )
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- Earlier experiment, kept for reference: KL-trained RSRP LSTM ------
-    with st.expander("Earlier experiment: KL-trained signal-quality LSTM"):
-        st.caption("Kept for reference — trained on Kuala Lumpur drive-test data "
-                  "before real Penang time-series data (above) was found. Predicts "
-                  "next RSRP from 10 prior per-second observations. NOT Penang data.")
-        if st.button("▶ Run sample KL prediction", key="lstm_kl_btn"):
-            try:
-                import requests
-                base = LSTM_API_URL
-                sample = requests.get(f"{base}/sample-request", timeout=5).json()
-                resp = requests.post(f"{base}/predict-rsrp", json=sample, timeout=15)
-                resp.raise_for_status()
-                r = resp.json()
-                cls_color = {"Good": "#00e676", "Weak": "#ff9800", "Poor": "#ff1744"}.get(r["signal_class"], "#8b96a5")
-                st.markdown(
-                    f'<div style="margin-top:4px">'
-                    f'<span style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
-                    f'{r["predicted_rsrp_dbm"]} dBm</span>&nbsp;&nbsp;'
-                    f'<span style="color:{cls_color}">● {r["signal_class"]}</span>'
-                    f'<div style="color:#8b96a5;font-size:.78rem;margin-top:4px">'
-                    f'at {r["latitude"]:.4f}, {r["longitude"]:.4f} · '
-                    f'{r["response_time_ms"]:.0f} ms · {r["model_version"]}</div>'
-                    f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'
-                    f'{r["caveat"]}</div></div>',
-                    unsafe_allow_html=True,
-                )
-            except Exception as e:
-                st.warning(f"LSTM API not reachable at {LSTM_API_URL} ({e}).")
+    # NOTE: an earlier KL-trained signal-quality LSTM demo panel used to live
+    # here. Removed from the live dashboard (2026-08-20, user request) as
+    # unnecessary for the finale demo now that the Penang model above exists —
+    # the KL model/training script/notebook are kept in the repo (ml/) and
+    # api/main.py's /predict-rsrp endpoint still works if referenced in Q&A,
+    # just not shown in the UI.
 
 st.caption(
     "Function 1 (estimated underserved population/kampungs) ✓ · Function 2 (overloaded flags) ✓ "
