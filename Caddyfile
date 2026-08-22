@@ -3,36 +3,47 @@
 #   - sitesense5g.com's DNS A record points to this droplet, and
 #   - ports 80 and 443 are open to the internet.
 #
-# TLS defaults (already applied by Caddy, no config needed): TLS 1.2/1.3 only,
-# modern AEAD/ECDHE ciphers, OCSP stapling, auto HTTP->HTTPS redirect.
+# TLS defaults (already applied by Caddy): TLS 1.2/1.3 only, modern AEAD/ECDHE
+# ciphers, OCSP stapling, auto HTTP->HTTPS redirect.
 
 sitesense5g.com {
-    reverse_proxy app:8501
+    # Social-media link crawlers (Telegram, Facebook, WhatsApp, LinkedIn,
+    # Discord, Slack, X/Twitter, etc.) get a small Open Graph page so pasted
+    # links show a rich card; real visitors fall through to the live app.
+    @crawlers header User-Agent *TelegramBot* *facebookexternalhit* *Facebot* *Twitterbot* *LinkedInBot* *WhatsApp* *Slackbot* *Discordbot* *redditbot* *Pinterest* *Applebot* *SkypeUriPreview* *vkShare*
+
+    # 1) The preview image must always serve as the real file (any UA / path-first).
+    handle /preview.png {
+        root * /srv/preview
+        file_server
+    }
+
+    # 2) Crawlers on any other path -> the Open Graph preview page.
+    handle @crawlers {
+        root * /srv/preview
+        rewrite * /index.html
+        file_server
+    }
+
+    # 3) Everyone else -> the live Streamlit dashboard.
+    handle {
+        reverse_proxy app:8501
+    }
 
     # --- Security headers (defensive hardening) ---------------------------
     header {
-        # Force HTTPS for a year (browser refuses plain HTTP to this host).
         Strict-Transport-Security "max-age=31536000"
-        # Block being framed by other sites (clickjacking).
         X-Frame-Options "SAMEORIGIN"
-        # Stop MIME-type sniffing.
         X-Content-Type-Options "nosniff"
-        # Limit referrer leakage.
         Referrer-Policy "strict-origin-when-cross-origin"
-        # Don't advertise the server software.
         -Server
     }
-    # Note: a strict Content-Security-Policy is intentionally NOT set here —
-    # Streamlit relies on inline scripts/styles and a locked-down CSP breaks
-    # the app. The reverse proxy + HSTS + frame/anti-sniff headers are the
-    # meaningful wins for this stack.
+    # Note: no strict Content-Security-Policy — Streamlit needs inline scripts.
 }
 
 # --- OPTIONAL: public API /docs over HTTPS (uncomment to enable) -----------
-# To expose the FastAPI /docs securely instead of via a plain-HTTP port:
-#   1. Add a DNS A record  api.sitesense5g.com -> 178.128.24.102
-#   2. Uncomment the block below and redeploy (docker compose up -d).
-# The API stays HTTPS-only; there is still no plain-HTTP :8001 on the host.
+# 1. Add a DNS A record  api.sitesense5g.com -> 178.128.24.102
+# 2. Uncomment and redeploy (docker compose up -d).
 #
 # api.sitesense5g.com {
 #     reverse_proxy api:8001
