@@ -49,8 +49,11 @@ services:
         condition: service_healthy
       loader:
         condition: service_completed_successfully
-    ports:
-      - "8001:8001"
+    # No host port: the API is reached only internally by the app (api:8001)
+    # and, if you enable the api subdomain in the Caddyfile, by Caddy over 443.
+    # This removes the plain-HTTP :8001 bypass from the public internet.
+    expose:
+      - "8001"
     restart: unless-stopped
 
   # --- Streamlit dashboard ------------------------------------------------
@@ -66,9 +69,27 @@ services:
         condition: service_healthy
       loader:
         condition: service_completed_successfully
+    # No host port: reachable only via Caddy (HTTPS on 443). This removes the
+    # plain-HTTP :8501 bypass — all public traffic is forced through TLS.
+    expose:
+      - "8501"
+    restart: unless-stopped
+
+  # --- Caddy reverse proxy: automatic HTTPS (Let's Encrypt) for the domain -
+  caddy:
+    image: caddy:2
+    depends_on:
+      - app
     ports:
-      - "8501:8501"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data       # persists the TLS certs across restarts
+      - caddy_config:/config
     restart: unless-stopped
 
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:
