@@ -10,7 +10,7 @@ sitesense5g.com {
     # Social-media link crawlers (Telegram, Facebook, WhatsApp, LinkedIn,
     # Discord, Slack, X/Twitter, etc.) get a small Open Graph page so pasted
     # links show a rich card; real visitors fall through to the live app.
-    @crawlers header User-Agent *TelegramBot* *facebookexternalhit* *Facebot* *Twitterbot* *LinkedInBot* *WhatsApp* *Slackbot* *Discordbot* *redditbot* *Pinterest* *Applebot* *SkypeUriPreview* *vkShare*
+    @crawlers header_regexp User-Agent (?i)(TelegramBot|facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|Slackbot|Discordbot|redditbot|Pinterest|Applebot|SkypeUriPreview|vkShare|Google-InspectionTool|bingbot)
 
     # 1) The preview image must always serve as the real file (any UA / path-first).
     handle /preview.png {
