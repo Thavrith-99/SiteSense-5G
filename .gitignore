@@ -28,3 +28,6 @@ outputs/
 Thumbs.db
 .vscode/
 .idea/
+
+# Deployment secrets
+.env

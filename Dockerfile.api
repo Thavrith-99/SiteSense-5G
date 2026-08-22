@@ -1,0 +1,21 @@
+# SiteSense 5G — FastAPI + LSTM service image.
+# Full python:3.12 (not slim) so TensorFlow's shared libs (libgomp, libstdc++)
+# are present without extra apt work. Heavier image, but reliable for TF inference.
+FROM python:3.12
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY api/requirements.txt api/requirements.txt
+RUN pip install --no-cache-dir -r api/requirements.txt
+
+COPY . .
+
+EXPOSE 8001
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
+    CMD curl -fsS http://localhost:8001/health || exit 1
+
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8001"]

@@ -1,0 +1,74 @@
+# SiteSense 5G — full-stack deployment (Physical Finale).
+# One command brings up PostGIS + FastAPI + Streamlit, matching the local dev stack.
+#   DB_PASSWORD is read from a .env file next to this compose file (see .env.example).
+#
+# Bring up:   docker compose up -d --build
+# Logs:       docker compose logs -f
+# Dashboard:  http://<host>:8501     API docs: http://<host>:8001/docs
+# Tear down:  docker compose down          (add -v to also wipe the database volume)
+
+services:
+  # --- PostGIS spatial database ------------------------------------------
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: sitesense5g
+      POSTGRES_USER: sitesense
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sitesense -d sitesense5g"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  # --- one-shot: create schema + load towers/villages/boundaries ---------
+  loader:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    environment:
+      DATABASE_URL: postgresql://sitesense:${DB_PASSWORD}@db:5432/sitesense5g
+    depends_on:
+      db:
+        condition: service_healthy
+    command: python data_prep/load_postgis.py
+    restart: "no"
+
+  # --- FastAPI service (Functions 1-3 + both LSTMs) ----------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      DATABASE_URL: postgresql://sitesense:${DB_PASSWORD}@db:5432/sitesense5g
+    depends_on:
+      db:
+        condition: service_healthy
+      loader:
+        condition: service_completed_successfully
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+
+  # --- Streamlit dashboard ------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    environment:
+      DATABASE_URL: postgresql://sitesense:${DB_PASSWORD}@db:5432/sitesense5g
+      LSTM_API_URL: http://api:8001
+    depends_on:
+      db:
+        condition: service_healthy
+      loader:
+        condition: service_completed_successfully
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

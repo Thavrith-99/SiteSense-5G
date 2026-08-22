@@ -268,7 +268,7 @@ with st.sidebar:
                   "proxy above the ranking; each site's estimated capex (below) uses "
                   "a real cited industry benchmark instead. Slope uses real SRTM "
                   "elevation data. Weights are team-set/expert-judgement, not learned.")
-    new_range = st.slider("New 5G tower range (m)", 300, 3000, 1000, step=100,
+    new_range = st.slider("New 5G tower range (m)", 300, 3000, 1700, step=100,
                           help="Assumed coverage radius of a new 5G tower.")
     n_sites = st.slider("Sites to recommend", 1, 15, 5)
     show_sites = st.checkbox("Show preliminary recommended sites", value=True)

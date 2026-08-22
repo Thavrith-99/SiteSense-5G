@@ -1,0 +1,17 @@
+# Keep the build context small + reproducible (the droplet builds from a clean git clone).
+.git
+.gitignore
+.venv
+.venv-ml
+**/__pycache__
+**/*.pyc
+.streamlit/secrets.toml
+# large/re-fetchable inputs that are NOT committed and NOT needed at runtime
+data/population/mys_ppp_2020_UNadj.tif
+data/terrain/*.hgt
+data/terrain/*.hgt.gz
+data/ookla_penang/_tmp.parquet
+# dev-only
+tests/
+*.md
+deck_png*/
