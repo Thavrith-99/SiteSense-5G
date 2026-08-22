@@ -21,6 +21,8 @@ env/
 # --- Streamlit / build artifacts ---
 outputs/
 *.html
+# the social link-preview page must be committed (exception to *.html)
+!preview/index.html
 .streamlit/secrets.toml
 
 # --- OS / editor ---
