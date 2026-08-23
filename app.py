@@ -115,7 +115,7 @@ st.markdown(
     <style>
       .block-container { padding-top: 2.6rem; padding-bottom: 1rem;
         padding-left: 1.5rem; padding-right: 1.5rem; max-width: 100%; }
-      .app-title { font-size: 1.55rem; font-weight: 700; line-height: 1.45;
+      .app-title { font-size: 2rem; font-weight: 700; line-height: 1.35;
         color: #f1f4f8; margin: 0 0 2px 0; padding-top: 4px; }
       .app-sub { color: #8b96a5; font-size: 0.85rem; margin: 0 0 10px 0; }
       .kpi-card {
@@ -330,7 +330,7 @@ st.write("")
 # --------------------------------------------------------------------------
 # Main: map (left) + status panel (right)
 # --------------------------------------------------------------------------
-map_col, panel_col = st.columns([2.6, 1], gap="medium")
+map_col, panel_col = st.columns([3, 1], gap="small")
 
 with map_col:
     _center = SCOPES[scope]["center"]
@@ -483,7 +483,7 @@ with panel_col:
         covered_total = sites[-1]["cumulative_gained"]
         pct_gap = covered_total / gap["uncovered_pop"] * 100 if gap["uncovered_pop"] else 0
         PHASE_COLOR = {1: "#00e676", 2: "#ff9800", 3: "#7f8a99"}
-        rows = "".join(
+        cards = [
             f'<div style="margin:6px 0;padding-bottom:6px;'
             f'border-bottom:1px solid #1c3b32">'
             f'<b style="color:#00e676">#{s["rank"]}</b> '
@@ -501,7 +501,18 @@ with panel_col:
             f'<br><span style="color:#7f8a99;font-size:.75rem">'
             f'{s["lat"]:.4f}, {s["lon"]:.4f}</span></div>'
             for s in sites
-        )
+        ]
+        rows_first = "".join(cards[:3])
+        rows_rest = "".join(cards[3:])
+        more_html = ""
+        if len(cards) > 3:
+            more_html = (
+                '<details style="margin-top:2px">'
+                '<summary style="cursor:pointer;color:#22d3ee;font-size:.78rem;'
+                'padding:6px 0 2px 0">'
+                f'Show {len(cards) - 3} more sites</summary>'
+                f'<div style="margin-top:4px">{rows_rest}</div></details>'
+            )
         total_cost = sum(s["est_capex_usd"] for s in sites)
         st.markdown(
             f'<div class="panel"><h4>💡 AI Insights — preliminary 5G site recommendations</h4>'
@@ -510,7 +521,7 @@ with panel_col:
             f'<b>${total_cost:,.0f}</b>) would reach an estimated '
             f'<b>{covered_total:,.0f}</b> of the {gap["uncovered_pop"]:,.0f} people in estimated '
             f'underserved areas (<b>{pct_gap:.0f}%</b> of the gap).'
-            f'<div style="margin-top:8px">{rows}</div>'
+            f'<div style="margin-top:8px">{rows_first}</div>{more_html}'
             f'<div style="margin-top:8px;color:#5b6472;font-size:.68rem;font-style:italic">'
             f'Weighted multi-criteria score (population reached · backhaul proximity to existing '
             f'towers · overload relief · SRTM slope penalty) — weights are team-set/expert-judgement, '
