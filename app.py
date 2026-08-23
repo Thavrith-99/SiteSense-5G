@@ -113,7 +113,8 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-      .block-container { padding-top: 2.6rem; padding-bottom: 1rem; }
+      .block-container { padding-top: 2.6rem; padding-bottom: 1rem;
+        padding-left: 1.5rem; padding-right: 1.5rem; max-width: 100%; }
       .app-title { font-size: 1.55rem; font-weight: 700; line-height: 1.45;
         color: #f1f4f8; margin: 0 0 2px 0; padding-top: 4px; }
       .app-sub { color: #8b96a5; font-size: 0.85rem; margin: 0 0 10px 0; }
@@ -329,7 +330,7 @@ st.write("")
 # --------------------------------------------------------------------------
 # Main: map (left) + status panel (right)
 # --------------------------------------------------------------------------
-map_col, panel_col = st.columns([2.1, 1], gap="medium")
+map_col, panel_col = st.columns([2.6, 1], gap="medium")
 
 with map_col:
     _center = SCOPES[scope]["center"]
@@ -421,7 +422,7 @@ with map_col:
                 ),
             ).add_to(m)
 
-    st_folium(m, use_container_width=True, height=820, returned_objects=[])
+    st_folium(m, use_container_width=True, height=960, returned_objects=[])
 
 with panel_col:
     # --- Status (network-health donut, ANDROMEDA-style) ---
