@@ -1,0 +1,49 @@
+# Auto-deploy SiteSense 5G to the DigitalOcean droplet on every push to main.
+# Flow:  push → run tests → (if green) SSH to droplet → git pull + rebuild → live.
+#
+# Requires these repo Secrets (Settings → Secrets and variables → Actions):
+#   DROPLET_SSH_KEY  — the private deploy key (sitesense_deploy)
+#   DROPLET_IP       — 178.128.24.102
+#   DROPLET_USER     — root
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:            # lets you also trigger it manually from the Actions tab
+
+concurrency:                    # never run two deploys at once
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  # --- 1) Test gate: a broken commit never reaches the server -------------
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dashboard dependencies
+        run: pip install -r requirements.txt
+      - name: Run regression tests (file-mode)
+        run: python tests/integration_regression.py
+
+  # --- 2) Deploy: only if tests pass --------------------------------------
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH to droplet and redeploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/SiteSense-5G
+            git pull origin main
+            docker compose up -d --build
+            docker image prune -f
