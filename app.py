@@ -346,8 +346,9 @@ def require_login() -> None:
                 unsafe_allow_html=True,
             )
             with st.form("login_form", clear_on_submit=False):
-                username = st.text_input("Username")
-                password = st.text_input("Password", type="password")
+                username = st.text_input("Username", placeholder="Username")
+                password = st.text_input("Password", type="password",
+                                         placeholder="Enter your password")
                 submitted = st.form_submit_button("Sign in", use_container_width=True)
 
             if submitted:
