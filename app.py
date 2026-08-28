@@ -339,10 +339,8 @@ def require_login() -> None:
             st.markdown(
                 '<div class="login-icon">' + _LOGO_SVG + '</div>'
                 '<div class="login-title">SiteSense 5G</div>'
-                '<div class="login-sub"><i>Where should the next 5G tower go?</i>'
-                '<br>GeoAI decision-support for tower siting &amp; coverage-gap planning'
-                '<br><span style="color:#6f7b8a;font-size:.86em">Restricted access &mdash; '
-                'sign in to continue.</span></div>',
+                '<div class="login-sub">Enter your credentials to access the '
+                'SiteSense 5G dashboard</div>',
                 unsafe_allow_html=True,
             )
             with st.form("login_form", clear_on_submit=False):
