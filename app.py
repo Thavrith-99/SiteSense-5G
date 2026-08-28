@@ -33,6 +33,7 @@ except Exception:  # pragma: no cover - fallback if leafmap unavailable
     HAVE_LEAFMAP = False
 
 from streamlit_folium import st_folium
+import streamlit.components.v1 as components
 
 import coverage as cov
 import recommend as rec
@@ -122,9 +123,28 @@ compute_sites = st.cache_data(show_spinner="Scoring candidate sites…")(da.comp
 # --------------------------------------------------------------------------
 _authenticated = st.session_state.get("authenticated", False)
 
+# Browser-tab favicon — the SiteSense cell-tower mark as an inline SVG data URI,
+# on a dark rounded tile so it reads on both light and dark browser tabs. Renders
+# identically everywhere (no OS/emoji dependence).
+import base64 as _b64
+_FAVICON_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="15 26 90 90">'
+    '<defs><linearGradient id="fav" x1="0" y1="0" x2="1" y2="1">'
+    '<stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#2dd4bf"/>'
+    '</linearGradient></defs>'
+    '<g stroke="url(#fav)" stroke-width="7" stroke-linecap="round" fill="none">'
+    '<path d="M45 40 a 24 24 0 0 0 0 36" opacity="0.92"/>'
+    '<path d="M75 40 a 24 24 0 0 1 0 36" opacity="0.92"/></g>'
+    '<circle cx="60" cy="52" r="9" fill="url(#fav)"/>'
+    '<g stroke="url(#fav)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none">'
+    '<path d="M60 60 L60 98"/><path d="M46 100 L60 64 L74 100"/></g>'
+    '</svg>'
+)
+_FAVICON = "data:image/svg+xml;base64," + _b64.b64encode(_FAVICON_SVG.encode()).decode()
+
 st.set_page_config(
     page_title="SiteSense 5G - Penang",
-    page_icon="📡",
+    page_icon=_FAVICON,
     layout="wide",
     initial_sidebar_state="expanded" if _authenticated else "collapsed",
 )
@@ -183,33 +203,119 @@ st.markdown(
          (Streamlit >=1.31 stamps a matching class on the container's div),
          so the header text and the form fields render inside one card. */
       .st-key-login_card {
-        background: #11151c; border: 1px solid #232a36; border-radius: 16px;
-        padding: 36px 34px 28px 34px; margin: 8vh auto 0 auto; max-width: 380px;
-        box-shadow: 0 8px 28px rgba(0,0,0,.4);
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        z-index: 3; width: min(94vw, 540px);
+        background: linear-gradient(160deg, rgba(18,23,32,0.97), rgba(8,10,15,0.985));
+        backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+        border: 1px solid rgba(34,211,238,0.42); border-radius: 20px;
+        padding: 30px 48px 46px 48px;
+        box-shadow: 0 24px 70px rgba(0,0,0,.7);
       }
-      .login-icon { font-size: 2.4rem; text-align: center; margin-bottom: 6px; }
-      .login-title { font-size: 1.4rem; font-weight: 700; color: #f1f4f8;
-        text-align: center; margin: 0 0 4px 0; }
-      .login-sub { color: #8b96a5; font-size: 0.82rem; text-align: center;
-        margin: 0 0 22px 0; }
+      .login-icon { font-size: 6rem; line-height: 1; text-align: center; margin-bottom: 4px; }
+      .login-title { font-size: 2.5rem; font-weight: 800; color: #f1f4f8;
+        text-align: center; margin: 0 0 4px 0; letter-spacing: .3px; }
+      .login-sub { color: #9aa6b4; font-size: 0.95rem; text-align: center;
+        margin: 0 0 14px 0; line-height: 1.5; }
       .st-key-login_card div[data-testid="stForm"] { border: none; padding: 0; }
       .st-key-login_card div[data-testid="stTextInputRootElement"] {
-        background: #171c26; border: 1px solid #2a3242; border-radius: 8px;
+        background: rgba(23,28,38,0.85); border: 1px solid #2a3242; border-radius: 9px;
       }
       .st-key-login_card div[data-testid="stTextInputRootElement"]:focus-within {
-        border-color: #3d8bfd;
+        border-color: #22d3ee; box-shadow: 0 0 0 2px rgba(34,211,238,0.18);
       }
-      .st-key-login_card input[data-testid="stTextInputField"] { color: #f1f4f8; }
+      .st-key-login_card input[data-testid="stTextInputField"] { color: #f1f4f8; font-size: 1rem; }
       .st-key-login_card button[data-testid^="stBaseButton"] {
-        background: #1b2530; border: 1px solid #2a3242; color: #f1f4f8;
+        background: linear-gradient(135deg, #0891b2, #0e7490);
+        border: none; color: #ffffff; font-weight: 700; font-size: 1.05rem;
+        padding: 0.72rem 1rem; border-radius: 10px; margin-top: 6px;
+        box-shadow: 0 4px 16px rgba(8,145,178,0.35); transition: all .15s ease;
       }
       .st-key-login_card button[data-testid^="stBaseButton"]:hover {
-        border-color: #3d8bfd; color: #ffffff;
+        background: linear-gradient(135deg, #0aa6cc, #0f8296);
+        box-shadow: 0 6px 22px rgba(8,145,178,0.5); transform: translateY(-1px);
       }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+
+# Interactive telecom-network canvas (login page only). The component runs in a
+# same-origin iframe and injects a full-viewport <canvas> into the parent
+# document, so it renders as a live, mouse-reactive background behind the card.
+_LOGIN_CANVAS = """
+<script>
+(function(){
+  const win = window.parent, doc = win.document;
+  if (win.__ssNetRaf) { win.cancelAnimationFrame(win.__ssNetRaf); win.__ssNetRaf = null; }
+  const prev = doc.getElementById('ss-net-canvas'); if (prev) prev.remove();
+  const c = doc.createElement('canvas');
+  c.id = 'ss-net-canvas';
+  c.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;';
+  doc.body.insertBefore(c, doc.body.firstChild);
+  const ctx = c.getContext('2d');
+  let W=0,H=0,DPR=1, pts=[], mouse={x:-9999,y:-9999};
+  function size(){ DPR=Math.min(win.devicePixelRatio||1,2); W=win.innerWidth; H=win.innerHeight;
+    c.width=W*DPR; c.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0); }
+  function init(){ const n=Math.max(45, Math.min(95, Math.floor(W*H/16000))); pts=[];
+    for(let i=0;i<n;i++){ pts.push({x:Math.random()*W,y:Math.random()*H,
+      vx:(Math.random()-0.5)*0.35, vy:(Math.random()-0.5)*0.35}); } }
+  size(); init();
+  win.addEventListener('resize', function(){ size(); init(); });
+  win.addEventListener('mousemove', function(e){ mouse.x=e.clientX; mouse.y=e.clientY; });
+  win.addEventListener('mouseout', function(){ mouse.x=-9999; mouse.y=-9999; });
+  const D=145, MD=210;
+  function frame(){
+    ctx.fillStyle='#0a0e15'; ctx.fillRect(0,0,W,H);
+    for(const p of pts){ p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0||p.x>W) p.vx*=-1; if(p.y<0||p.y>H) p.vy*=-1;
+      const dx=mouse.x-p.x, dy=mouse.y-p.y, d=Math.hypot(dx,dy);
+      if(d<MD && d>0.1){ p.x+=dx/d*0.5; p.y+=dy/d*0.5; } }
+    for(let i=0;i<pts.length;i++){ for(let j=i+1;j<pts.length;j++){
+      const a=pts[i], b=pts[j], dx=a.x-b.x, dy=a.y-b.y, d=Math.hypot(dx,dy);
+      if(d<D){ ctx.strokeStyle='rgba(34,211,238,'+(0.16*(1-d/D))+')'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); } } }
+    if(mouse.x>-9000){ for(const p of pts){ const dx=mouse.x-p.x, dy=mouse.y-p.y, d=Math.hypot(dx,dy);
+      if(d<MD){ ctx.strokeStyle='rgba(45,212,191,'+(0.38*(1-d/MD))+')'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(mouse.x,mouse.y); ctx.lineTo(p.x,p.y); ctx.stroke(); } } }
+    for(const p of pts){ ctx.fillStyle='rgba(130,205,225,0.8)';
+      ctx.beginPath(); ctx.arc(p.x,p.y,1.7,0,6.2832); ctx.fill(); }
+    if(mouse.x>-9000){ ctx.fillStyle='rgba(34,211,238,0.95)';
+      ctx.beginPath(); ctx.arc(mouse.x,mouse.y,3,0,6.2832); ctx.fill(); }
+    win.__ssNetRaf = win.requestAnimationFrame(frame);
+  }
+  frame();
+})();
+</script>
+"""
+
+
+# Custom SiteSense 5G mark — a cell tower broadcasting signal, in the project's
+# cyan/teal gradient. Inline SVG so it renders identically everywhere (unlike the
+# platform-dependent 📡 emoji) and stays crisp at any size.
+_LOGO_SVG = """
+<svg width="104" height="104" viewBox="0 0 120 120" fill="none"
+     xmlns="http://www.w3.org/2000/svg"
+     style="display:block;margin:0 auto;filter:drop-shadow(0 3px 10px rgba(34,211,238,0.30))">
+  <defs>
+    <linearGradient id="ssgLogo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#2dd4bf"/>
+    </linearGradient>
+  </defs>
+  <g stroke="url(#ssgLogo)" stroke-width="6" stroke-linecap="round" fill="none">
+    <path d="M44 36 a 26 26 0 0 0 0 40" opacity="0.9"/>
+    <path d="M31 27 a 42 42 0 0 0 0 58" opacity="0.42"/>
+    <path d="M76 36 a 26 26 0 0 1 0 40" opacity="0.9"/>
+    <path d="M89 27 a 42 42 0 0 1 0 58" opacity="0.42"/>
+  </g>
+  <circle cx="60" cy="50" r="9" fill="url(#ssgLogo)"/>
+  <g stroke="url(#ssgLogo)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M60 59 L60 100"/>
+    <path d="M45 102 L60 62 L75 102"/>
+  </g>
+</svg>
+"""
 
 
 def require_login() -> None:
@@ -218,14 +324,25 @@ def require_login() -> None:
     if _authenticated or not APP_PASSWORD:
         return
 
+    # Transparent app background so the interactive network canvas (injected by
+    # the component below) shows through behind the glassy login card.
+    st.markdown(
+        "<style>.stApp,[data-testid='stAppViewContainer'],[data-testid='stMain'],"
+        "section.main,[data-testid='stHeader']{background:transparent !important;}</style>",
+        unsafe_allow_html=True,
+    )
+    components.html(_LOGIN_CANVAS, height=0)
+
     _, mid, _ = st.columns([1, 1.1, 1])
     with mid:
         with st.container(key="login_card"):
             st.markdown(
-                '<div class="login-icon">📡</div>'
+                '<div class="login-icon">' + _LOGO_SVG + '</div>'
                 '<div class="login-title">SiteSense 5G</div>'
-                '<div class="login-sub">GeoAI tower-siting &amp; 5G coverage-gap planner'
-                '<br>Restricted access &mdash; sign in to continue.</div>',
+                '<div class="login-sub"><i>Where should the next 5G tower go?</i>'
+                '<br>GeoAI decision-support for tower siting &amp; coverage-gap planning'
+                '<br><span style="color:#6f7b8a;font-size:.86em">Restricted access &mdash; '
+                'sign in to continue.</span></div>',
                 unsafe_allow_html=True,
             )
             with st.form("login_form", clear_on_submit=False):
@@ -246,6 +363,42 @@ def require_login() -> None:
 
 
 require_login()
+
+
+# --- Dashboard icon set: consistent inline-SVG line icons (cyan accent) that
+# replace the platform-dependent emojis, matching the login logo's style. ---
+_CYAN = "#22d3ee"
+
+
+def _svg(body: str, color: str = _CYAN, size: str = "1.15em", mr: str = "0.45em") -> str:
+    return (f'<svg viewBox="0 0 24 24" width="{size}" height="{size}" fill="none" '
+            f'stroke="{color}" stroke-width="1.9" stroke-linecap="round" '
+            f'stroke-linejoin="round" style="vertical-align:-0.22em;margin-right:{mr}">'
+            f'{body}</svg>')
+
+
+ICON = {
+    "tower": _svg('<circle cx="12" cy="6" r="1"/><path d="M12 7v13"/>'
+                  '<path d="M8 20l4-9 4 9"/><path d="M8.3 4.3a5 5 0 0 0 0 5.4"/>'
+                  '<path d="M15.7 4.3a5 5 0 0 1 0 5.4"/>'),
+    "people": _svg('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>'
+                   '<circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>'
+                   '<path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
+    "village": _svg('<path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.8V21h14V9.8"/>'
+                    '<path d="M10 21v-5h4v5"/>'),
+    "flame": _svg('<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 '
+                  '2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 '
+                  '1-3a2.5 2.5 0 0 0 2.5 2.5z"/>', color="#ff7a45"),
+    "chart": _svg('<path d="M6 20v-6"/><path d="M12 20V4"/><path d="M18 20v-9"/>'),
+    "bulb": _svg('<path d="M9 18h6"/><path d="M10 22h4"/>'
+                 '<path d="M8 15a6 6 0 1 1 8 0c-.8.7-1.3 1.5-1.5 2.5H9.5c-.2-1-.7-1.8-1.5-2.5z"/>'),
+    "trend": _svg('<path d="M22 7l-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/>'),
+}
+
+# Small gradient tower mark for the sidebar header (reuses the login logo).
+_SIDEBAR_LOGO = _LOGO_SVG.replace(
+    'width="104" height="104"', 'width="30" height="30"'
+).replace('display:block;margin:0 auto;', 'display:inline-block;vertical-align:middle;')
 
 
 def kpi_card(col, label: str, value: str, sub: str = "", icon: str = "") -> None:
@@ -291,7 +444,12 @@ if not CSV.exists():
 # Sidebar - scope + filters (Function inputs)
 # --------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("## 📡 SiteSense 5G")
+    st.markdown(
+        f'<div style="display:flex;align-items:center;gap:9px;margin:0 0 6px 0">'
+        f'{_SIDEBAR_LOGO}'
+        f'<span style="font-size:1.5rem;font-weight:700;color:#f1f4f8">SiteSense 5G</span></div>',
+        unsafe_allow_html=True,
+    )
     st.caption("GeoAI tower-siting & 5G coverage-gap planner")
     st.divider()
 
@@ -398,16 +556,16 @@ st.markdown(
 )
 
 k1, k2, k3, k4 = st.columns(4)
-kpi_card(k1, "Cells in view", f"{n_towers:,}", f"{n_4g:,} × 4G · {n_5g:,} × 5G", icon="📡")
+kpi_card(k1, "Cells in view", f"{n_towers:,}", f"{n_4g:,} × 4G · {n_5g:,} × 5G", icon=ICON["tower"])
 kpi_card(k2, "Est. people underserved", f"{gap['uncovered_pop']:,.0f}",
-         f"{gap['pct_covered']:.1f}% of {gap['total_pop']:,.0f} est. covered", icon="👥")
+         f"{gap['pct_covered']:.1f}% of {gap['total_pop']:,.0f} est. covered", icon=ICON["people"])
 kpi_card(k3, "Kampungs — est. underserved", f"{gap['n_uncovered_places']:,}",
-         f"of {gap['n_places']:,} OSM places in view", icon="🏘️")
+         f"of {gap['n_places']:,} OSM places in view", icon=ICON["village"])
 overloaded_sub = (
     f"≥ {load_p}th pct load ({int(load_threshold)} samples)"
     if n_towers else "no cells match the current filter"
 )
-kpi_card(k4, "Overloaded towers", f"{n_overloaded:,}", overloaded_sub, icon="🔥")
+kpi_card(k4, "Overloaded towers", f"{n_overloaded:,}", overloaded_sub, icon=ICON["flame"])
 
 st.write("")
 
@@ -544,7 +702,7 @@ with panel_col:
 
     # --- Coverage gap (Function 1) ---
     st.markdown(
-        f'<div class="panel"><h4>📶 Estimated coverage gap (4G/5G)</h4>'
+        f'<div class="panel"><h4>{ICON["chart"]}Estimated coverage gap (4G/5G)</h4>'
         f'<div style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
         f'{gap["uncovered_pop"]:,.0f}</div>'
         f'<div style="color:#8b96a5;font-size:.78rem">people in estimated underserved areas · '
@@ -599,7 +757,7 @@ with panel_col:
             )
         total_cost = sum(s["est_capex_usd"] for s in sites)
         st.markdown(
-            f'<div class="panel"><h4>💡 AI Insights — preliminary 5G site recommendations</h4>'
+            f'<div class="panel"><h4>{ICON["bulb"]}AI Insights — preliminary 5G site recommendations</h4>'
             f'<div class="ai-insight">Building these <b>{len(sites)}</b> towers '
             f'(range {new_range} m, <b>{weight_profile}</b> profile, est. total capex '
             f'<b>${total_cost:,.0f}</b>) would reach an estimated '
@@ -618,7 +776,7 @@ with panel_col:
         )
     else:
         st.markdown(
-            '<div class="panel"><h4>💡 AI Insights</h4>'
+            f'<div class="panel"><h4>{ICON["bulb"]}AI Insights</h4>'
             '<div class="ai-insight">No estimated coverage gap to close in the current '
             'filter.</div></div>',
             unsafe_allow_html=True,
@@ -631,7 +789,7 @@ with panel_col:
     # real Penang tile history (Ookla Open Data, quarterly) — no
     # KL-transfer-learning caveat needed, this model has actually seen
     # Penang. See ml/train_lstm_penang.py for the KL-vs-Penang mapping.
-    st.markdown('<div class="panel"><h4>🧠 LSTM Network-Trend Demo (Penang, real data)</h4>',
+    st.markdown(f'<div class="panel"><h4>{ICON["trend"]}LSTM Network-Trend Demo (Penang, real data)</h4>',
                unsafe_allow_html=True)
     st.caption("Deployable ML pipeline demo — predicts next quarter's average mobile "
               "download throughput for a real Penang map tile from its last 4 quarters "
