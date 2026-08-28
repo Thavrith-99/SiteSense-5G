@@ -17,6 +17,7 @@ Layout inspiration: "ANDROMEDA" network-analytics dashboard
   (left filter sidebar - central map - right status panel).
 """
 
+import hmac
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -57,6 +58,22 @@ if not LSTM_API_URL:
         LSTM_API_URL = st.secrets["LSTM_API_URL"]
     except Exception:
         LSTM_API_URL = "http://127.0.0.1:8001"
+
+# --- Access gate (boss asked to restrict the public dashboard) -------------
+# Same override pattern as above: env var, then st.secrets. If no password is
+# configured (local dev with no .env), the gate is skipped so it never locks
+# out a fresh checkout.
+def _env_or_secret(key: str, default: str | None = None) -> str | None:
+    val = _os.environ.get(key)
+    if val:
+        return val
+    try:
+        return st.secrets[key]
+    except Exception:
+        return default
+
+APP_USERNAME = _env_or_secret("APP_USERNAME", "admin")
+APP_PASSWORD = _env_or_secret("APP_PASSWORD")
 
 # --- On-map legend (matches team-reviewed design: 7-item network legend) ---
 LEGEND_HTML = """
@@ -103,11 +120,13 @@ compute_sites = st.cache_data(show_spinner="Scoring candidate sites…")(da.comp
 # --------------------------------------------------------------------------
 # Page config + styling
 # --------------------------------------------------------------------------
+_authenticated = st.session_state.get("authenticated", False)
+
 st.set_page_config(
     page_title="SiteSense 5G - Penang",
     page_icon="📡",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded" if _authenticated else "collapsed",
 )
 
 st.markdown(
@@ -158,10 +177,75 @@ st.markdown(
         position: absolute; top: -3px; width: 3px; height: 12px; border-radius: 1px;
         background: #ffffff; box-shadow: 0 0 4px rgba(0,0,0,.7);
       }
+
+      /* --- Login gate --- */
+      /* .st-key-login_card targets the st.container(key="login_card") below
+         (Streamlit >=1.31 stamps a matching class on the container's div),
+         so the header text and the form fields render inside one card. */
+      .st-key-login_card {
+        background: #11151c; border: 1px solid #232a36; border-radius: 16px;
+        padding: 36px 34px 28px 34px; margin: 8vh auto 0 auto; max-width: 380px;
+        box-shadow: 0 8px 28px rgba(0,0,0,.4);
+      }
+      .login-icon { font-size: 2.4rem; text-align: center; margin-bottom: 6px; }
+      .login-title { font-size: 1.4rem; font-weight: 700; color: #f1f4f8;
+        text-align: center; margin: 0 0 4px 0; }
+      .login-sub { color: #8b96a5; font-size: 0.82rem; text-align: center;
+        margin: 0 0 22px 0; }
+      .st-key-login_card div[data-testid="stForm"] { border: none; padding: 0; }
+      .st-key-login_card div[data-testid="stTextInputRootElement"] {
+        background: #171c26; border: 1px solid #2a3242; border-radius: 8px;
+      }
+      .st-key-login_card div[data-testid="stTextInputRootElement"]:focus-within {
+        border-color: #3d8bfd;
+      }
+      .st-key-login_card input[data-testid="stTextInputField"] { color: #f1f4f8; }
+      .st-key-login_card button[data-testid^="stBaseButton"] {
+        background: #1b2530; border: 1px solid #2a3242; color: #f1f4f8;
+      }
+      .st-key-login_card button[data-testid^="stBaseButton"]:hover {
+        border-color: #3d8bfd; color: #ffffff;
+      }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+
+def require_login() -> None:
+    """Gate the whole dashboard behind a branded login form. Skipped when no
+    APP_PASSWORD is configured (fresh local checkout with no .env)."""
+    if _authenticated or not APP_PASSWORD:
+        return
+
+    _, mid, _ = st.columns([1, 1.1, 1])
+    with mid:
+        with st.container(key="login_card"):
+            st.markdown(
+                '<div class="login-icon">📡</div>'
+                '<div class="login-title">SiteSense 5G</div>'
+                '<div class="login-sub">GeoAI tower-siting &amp; 5G coverage-gap planner'
+                '<br>Restricted access &mdash; sign in to continue.</div>',
+                unsafe_allow_html=True,
+            )
+            with st.form("login_form", clear_on_submit=False):
+                username = st.text_input("Username")
+                password = st.text_input("Password", type="password")
+                submitted = st.form_submit_button("Sign in", use_container_width=True)
+
+            if submitted:
+                user_ok = hmac.compare_digest(username, APP_USERNAME)
+                pass_ok = hmac.compare_digest(password, APP_PASSWORD)
+                if user_ok and pass_ok:
+                    st.session_state.authenticated = True
+                    st.rerun()
+                else:
+                    st.error("Incorrect username or password.")
+
+    st.stop()
+
+
+require_login()
 
 
 def kpi_card(col, label: str, value: str, sub: str = "", icon: str = "") -> None:

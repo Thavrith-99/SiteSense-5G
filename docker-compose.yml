@@ -64,6 +64,8 @@ services:
     environment:
       DATABASE_URL: postgresql://sitesense:${DB_PASSWORD}@db:5432/sitesense5g
       LSTM_API_URL: http://api:8001
+      APP_USERNAME: ${APP_USERNAME:-admin}
+      APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD in .env}
     depends_on:
       db:
         condition: service_healthy

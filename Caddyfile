@@ -25,11 +25,10 @@ sitesense5g.com {
         file_server
     }
 
-    # 3) Everyone else -> the live Streamlit dashboard (password-gated).
+    # 3) Everyone else -> the live Streamlit dashboard. Login is handled
+    #    in-app (see app.py's require_login()) so it gets a branded page
+    #    instead of the browser's native basic-auth popup.
     handle {
-        basic_auth {
-            sitesense $2a$14$MvRCW0CaoZB/Gv/ozsizFOzxWzH/WGssOF0ztOW2SgY05BaoFV2oW
-        }
         reverse_proxy app:8501
     }
 
@@ -49,9 +48,6 @@ sitesense5g.com {
 # 2. Uncomment and redeploy (docker compose up -d).
 #
 # api.sitesense5g.com {
-#     basic_auth {
-#         sitesense $2a$14$MvRCW0CaoZB/Gv/ozsizFOzxWzH/WGssOF0ztOW2SgY05BaoFV2oW
-#     }
 #     reverse_proxy api:8001
 #     header {
 #         Strict-Transport-Security "max-age=31536000"
