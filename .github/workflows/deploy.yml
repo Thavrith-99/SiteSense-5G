@@ -1,39 +1,74 @@
-# Auto-deploy SiteSense 5G to the DigitalOcean droplet on every push to main.
-# Flow:  push → run tests → (if green) SSH to droplet → git pull + rebuild → live.
+# SiteSense 5G — single CI/CD workflow.
+# Flow:  push/PR → test-core + test-api + docker-build →
+#        (main only, all green) → SSH to droplet → git pull + rebuild → live.
 #
 # Requires these repo Secrets (Settings → Secrets and variables → Actions):
 #   DROPLET_SSH_KEY  — the private deploy key (sitesense_deploy)
 #   DROPLET_IP       — 178.128.24.102
 #   DROPLET_USER     — root
-name: Deploy to DigitalOcean
+name: CI & Deploy
 
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:            # lets you also trigger it manually from the Actions tab
 
-concurrency:                    # never run two deploys at once
-  group: deploy-production
-  cancel-in-progress: false
-
 jobs:
-  # --- 1) Test gate: a broken commit never reaches the server -------------
-  test:
+  # --- dashboard/data layer — no TensorFlow, plain requirements.txt --------
+  test-core:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install dashboard dependencies
-        run: pip install -r requirements.txt
-      - name: Run regression tests (file-mode)
-        run: python tests/integration_regression.py
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      - run: python tests/integration_regression.py
 
-  # --- 2) Deploy: only if tests pass --------------------------------------
-  deploy:
-    needs: test
+  # --- FastAPI + LSTM layer — heavier deps, separate requirements file -----
+  test-api:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: api/requirements.txt
+      - run: pip install -r api/requirements.txt
+      - run: python tests/api_integration.py
+
+  # --- make sure both images still build (no push) --------------------------
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.app
+          push: false
+      - name: Build api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.api
+          push: false
+
+  # --- deploy: only on push to main, only if every check above passed ------
+  deploy:
+    if: (github.ref == 'refs/heads/main' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
+    needs: [test-core, test-api, docker-build]
+    runs-on: ubuntu-latest
+    concurrency:                # never run two deploys at once; queue, don't cancel
+      group: deploy-production
+      cancel-in-progress: false
     steps:
       - name: SSH to droplet and redeploy
         uses: appleboy/ssh-action@v1.2.0
