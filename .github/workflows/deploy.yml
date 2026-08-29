@@ -3,9 +3,11 @@
 #        (main only, all green) → SSH to droplet → git pull + rebuild → live.
 #
 # Requires these repo Secrets (Settings → Secrets and variables → Actions):
-#   DROPLET_SSH_KEY  — the private deploy key (sitesense_deploy)
-#   DROPLET_IP       — 178.128.24.102
-#   DROPLET_USER     — root
+#   DROPLET_SSH_KEY     — the private deploy key (sitesense_deploy)
+#   DROPLET_IP          — 178.128.24.102
+#   DROPLET_USER        — root
+#   TELEGRAM_BOT_TOKEN  — bot token from @BotFather
+#   TELEGRAM_CHAT_ID    — target group's chat ID
 name: CI & Deploy
 
 on:
@@ -82,3 +84,16 @@ jobs:
             git pull origin main
             docker compose up -d --build
             docker image prune -f
+
+      - name: Notify Telegram
+        uses: appleboy/telegram-action@v1.0.1
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: |
+            ✅ *SiteSense 5G deployed*
+            Commit: `${{ github.sha }}`
+            ${{ github.event.head_commit.message }}
+            By: ${{ github.actor }}
+            [View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
