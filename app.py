@@ -579,18 +579,25 @@ map_col, panel_col = st.columns([3, 1], gap="small")
 with map_col:
     _center = SCOPES[scope]["center"]
     _zoom = SCOPES[scope]["zoom"]
+    # Key-FREE light-grey basemap. CARTO Positron now stamps an "API KEY REQUIRED"
+    # watermark on anonymous tiles, so we use Esri's free World Light Gray canvas
+    # (clean light look, no key, no watermark) + its reference labels overlay.
+    _GRAY = ("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/"
+             "World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}")
+    _GRAY_LABELS = ("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/"
+                    "World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}")
+    _ESRI_ATTR = "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors"
     if HAVE_LEAFMAP:
         m = leafmap.Map(center=_center, zoom=_zoom,
                         draw_control=False, measure_control=False,
                         fullscreen_control=True)
-        # Use folium's built-in CartoDB Positron (reliable, key-free) rather than
-        # leafmap's add_basemap(), whose xyzservices CARTO endpoint can stamp an
-        # "API key required" watermark. Matches the folium fallback below.
         import folium as _f_base
-        _f_base.TileLayer("cartodbpositron", name="Carto Light", control=False,
-                          attr="&copy; OpenStreetMap contributors &copy; CARTO").add_to(m)
     else:
-        m = folium.Map(location=_center, zoom_start=_zoom, tiles="cartodbpositron")
+        m = folium.Map(location=_center, zoom_start=_zoom, tiles=None)
+        _f_base = folium
+    _f_base.TileLayer(_GRAY, name="Light Gray Canvas", control=False, attr=_ESRI_ATTR).add_to(m)
+    _f_base.TileLayer(_GRAY_LABELS, name="Labels", control=False, overlay=True,
+                      attr=_ESRI_ATTR).add_to(m)
 
     import folium as _folium  # available via either path
     m.get_root().html.add_child(_folium.Element(LEGEND_HTML))
