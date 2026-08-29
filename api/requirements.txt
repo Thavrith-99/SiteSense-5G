@@ -32,3 +32,8 @@ ipykernel>=6.29
 
 # data_prep/fetch_ookla_penang.py only (reads Ookla's quarterly parquet tiles)
 pyarrow>=17.0
+
+# tests/api_integration.py only — starlette's TestClient needs this (renamed
+# from httpx in recent starlette releases); not a runtime dependency of the
+# API itself.
+httpx2
