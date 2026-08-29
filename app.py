@@ -224,6 +224,8 @@ st.markdown(
         border-color: #22d3ee; box-shadow: 0 0 0 2px rgba(34,211,238,0.18);
       }
       .st-key-login_card input[data-testid="stTextInputField"] { color: #f1f4f8; font-size: 1rem; }
+      /* hide Streamlit's "Press Enter to submit form" hint inside the login form */
+      .st-key-login_card [data-testid="InputInstructions"] { display: none; }
       .st-key-login_card button[data-testid^="stBaseButton"] {
         background: linear-gradient(135deg, #0891b2, #0e7490);
         border: none; color: #ffffff; font-weight: 700; font-size: 1.05rem;
