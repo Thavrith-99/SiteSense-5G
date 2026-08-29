@@ -95,7 +95,7 @@ LEGEND_HTML = """
   <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;
        background:#9e9e9e;margin-right:8px;"></span>2G GSM</div>
   <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;
-       background:transparent;border:2px solid #ff1744;margin-right:8px;"></span>Overloaded Tower</div>
+       background:transparent;border:2px solid #ff1744;margin-right:8px;"></span>High-Demand Cell (est.)</div>
   <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;
        background:#ff9800;margin-right:8px;"></span>Est. Underserved Village</div>
   <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;
@@ -427,9 +427,9 @@ def donut_widget(good: int, warn: int, err: int) -> str:
         f'<div class="donut-row">'
         f'<div class="donut" style="background:{gradient}"></div>'
         f'<div class="donut-legend">'
-        f'<span class="dot" style="background:#00e676"></span>good <b>{good:,}</b><br>'
-        f'<span class="dot" style="background:#ff9800"></span>warning <b>{warn:,}</b><br>'
-        f'<span class="dot" style="background:#ff1744"></span>error <b>{err:,}</b>'
+        f'<span class="dot" style="background:#00e676"></span>low <b>{good:,}</b><br>'
+        f'<span class="dot" style="background:#ff9800"></span>medium <b>{warn:,}</b><br>'
+        f'<span class="dot" style="background:#ff1744"></span>high <b>{err:,}</b>'
         f'</div></div>'
     )
 
@@ -483,8 +483,9 @@ with st.sidebar:
     )
 
     load_p = st.slider(
-        "Overloaded threshold (load percentile)", 50, 99, 90, step=1,
-        help="Cells above this 'samples' percentile are flagged as overloaded.",
+        "High-demand threshold (sample percentile)", 50, 99, 90, step=1,
+        help="Cells above this 'samples' percentile are flagged as high-demand — a "
+             "demand proxy from test/sample counts, not measured operator load.",
     )
 
     show_coverage = st.checkbox("Show coverage footprints", value=False,
@@ -563,10 +564,10 @@ kpi_card(k2, "Est. people underserved", f"{gap['uncovered_pop']:,.0f}",
 kpi_card(k3, "Kampungs — est. underserved", f"{gap['n_uncovered_places']:,}",
          f"of {gap['n_places']:,} OSM places in view", icon=ICON["village"])
 overloaded_sub = (
-    f"≥ {load_p}th pct load ({int(load_threshold)} samples)"
+    f"≥ {load_p}th pct demand proxy ({int(load_threshold)} samples)"
     if n_towers else "no cells match the current filter"
 )
-kpi_card(k4, "Overloaded towers", f"{n_overloaded:,}", overloaded_sub, icon=ICON["flame"])
+kpi_card(k4, "Est. high-demand cells", f"{n_overloaded:,}", overloaded_sub, icon=ICON["flame"])
 
 st.write("")
 
@@ -582,7 +583,12 @@ with map_col:
         m = leafmap.Map(center=_center, zoom=_zoom,
                         draw_control=False, measure_control=False,
                         fullscreen_control=True)
-        m.add_basemap("CartoDB.Positron")
+        # Use folium's built-in CartoDB Positron (reliable, key-free) rather than
+        # leafmap's add_basemap(), whose xyzservices CARTO endpoint can stamp an
+        # "API key required" watermark. Matches the folium fallback below.
+        import folium as _f_base
+        _f_base.TileLayer("cartodbpositron", name="Carto Light", control=False,
+                          attr="&copy; OpenStreetMap contributors &copy; CARTO").add_to(m)
     else:
         m = folium.Map(location=_center, zoom_start=_zoom, tiles="cartodbpositron")
 
@@ -606,7 +612,7 @@ with map_col:
                 fill=True, fill_opacity=0.9,
                 popup=_folium.Popup(
                     f"<b>{label}</b>"
-                    f"{' · <span style=color:#ff1744>OVERLOADED</span>' if is_hot else ''}"
+                    f"{' · <span style=color:#ff1744>HIGH-DEMAND</span>' if is_hot else ''}"
                     f"<br>range: {r['range']:.0f} m"
                     f"<br>load (samples): {r['samples']:.0f}"
                     f"<br>cell: {r['cell']}",
@@ -659,7 +665,7 @@ with map_col:
                 popup=_folium.Popup(
                     f"<b>Preliminary 5G site #{s['rank']}</b><br>"
                     f"+{s['people_gained']:,.0f} people in estimated new coverage<br>"
-                    f"relieves {s['overloaded_relieved']} overloaded tower(s)<br>"
+                    f"relieves {s['overloaded_relieved']} high-demand cell(s)<br>"
                     f"<span style='color:#666'>{s['lat']:.4f}, {s['lon']:.4f}</span>",
                     max_width=250,
                 ),
@@ -685,12 +691,12 @@ with panel_col:
         f'<div style="margin-top:6px">'
         f'<span style="color:#1e88e5">● 4G {n_4g:,}</span>&nbsp;&nbsp;'
         f'<span style="color:#e53935">● 5G {n_5g:,}</span>&nbsp;&nbsp;'
-        f'<span style="color:#ff1744">● hot {n_overloaded:,}</span>'
+        f'<span style="color:#ff1744">● high-demand {n_overloaded:,}</span>'
         f'</div>'
         f'{donut_widget(n_good, n_warning, n_error)}'
         f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'
-        f'Health = load vs. the {load_p}th-percentile overload threshold '
-        f'(warning &lt; 2× · error ≥ 2×).</div>'
+        f'Estimated demand pressure vs. the {load_p}th-percentile sample threshold '
+        f'(medium &lt; 2× · high ≥ 2×) — a demand proxy, not measured tower load.</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -707,7 +713,7 @@ with panel_col:
         f'<div style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
         f'{gap["uncovered_pop"]:,.0f}</div>'
         f'<div style="color:#8b96a5;font-size:.78rem">people in estimated underserved areas · '
-        f'{100 - gap["pct_covered"]:.1f}% of {scope}</div>'
+        f'{100 - gap["pct_covered"]:.1f}% of the estimated {scope} population</div>'
         f'<div style="margin-top:8px;color:#ff9800">● {gap["n_uncovered_places"]} '
         f'villages/kampungs — estimated underserved</div>'
         f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'
@@ -736,7 +742,7 @@ with panel_col:
             f'<div class="score-bar"><div class="score-marker" '
             f'style="left:{max(0.0, min(1.0, s.get("score", 0.0))) * 100:.1f}%"></div></div>'
             f'+{s["people_gained"]:,.0f} people'
-            f'{f" · relieves {s['overloaded_relieved']} overloaded" if s["overloaded_relieved"] else ""}'
+            f'{f" · relieves {s['overloaded_relieved']} high-demand" if s["overloaded_relieved"] else ""}'
             f'{f" · {s['backhaul_distance_m']:,.0f} m to nearest existing tower" if s.get("backhaul_distance_m") is not None else ""}'
             f'{f" · {s['slope_deg']:.1f}° slope" if s.get("slope_deg") is not None else ""}'
             f'<br><span style="color:#8b96a5;font-size:.72rem">'
@@ -759,17 +765,20 @@ with panel_col:
         total_cost = sum(s["est_capex_usd"] for s in sites)
         st.markdown(
             f'<div class="panel"><h4>{ICON["bulb"]}AI Insights — preliminary 5G site recommendations</h4>'
-            f'<div class="ai-insight">Building these <b>{len(sites)}</b> towers '
+            f'<div class="ai-insight">These <b>{len(sites)}</b> preliminary candidate sites '
             f'(range {new_range} m, <b>{weight_profile}</b> profile, est. total capex '
-            f'<b>${total_cost:,.0f}</b>) would reach an estimated '
+            f'<b>${total_cost:,.0f}</b>) could potentially reach an estimated '
             f'<b>{covered_total:,.0f}</b> of the {gap["uncovered_pop"]:,.0f} people in estimated '
-            f'underserved areas (<b>{pct_gap:.0f}%</b> of the gap).'
+            f'underserved areas (<b>{pct_gap:.0f}%</b> of the gap) — a preliminary ranking, not '
+            f'final tower locations (RF, cost, land &amp; regulatory checks still required).'
             f'<div style="margin-top:8px">{rows_first}</div>{more_html}'
             f'<div style="margin-top:8px;color:#5b6472;font-size:.68rem;font-style:italic">'
-            f'Weighted multi-criteria score (population reached · backhaul proximity to existing '
-            f'towers · overload relief · SRTM slope penalty) — weights are team-set/expert-judgement, '
-            f'not learned from data. Capex = $150k base + $62.5k/km backhaul fiber (industry '
-            f'benchmark, PatentPC 2026 — order-of-magnitude estimate, not a site-specific quote). '
+            f'Weighted multi-criteria score: population reached (WorldPop) · backhaul proximity '
+            f'(cost proxy — distance to nearest OpenCelliD tower) · demand-pressure relief (proxy — '
+            f'nearby high-sample cells) · SRTM slope (buildability proxy). Weights are '
+            f'team-set/expert-judgement, not learned from data. Capex = $150k base + $62.5k/km '
+            f'backhaul fiber (industry benchmark, PatentPC 2026 — order-of-magnitude estimate, not a '
+            f'site-specific quote). '
             f'Phase = rollout order by cost-efficiency (people reached per dollar), not selection '
             f'rank. Slope is a buildability proxy, not a full RF propagation model.'
             f'</div></div></div>',
@@ -800,11 +809,15 @@ with panel_col:
         try:
             import requests
             base = LSTM_API_URL
-            sample = requests.get(f"{base}/sample-request-penang", timeout=5).json()
-            resp = requests.post(f"{base}/predict-penang-network",
-                                 json={"observations": sample["observations"]}, timeout=15)
-            resp.raise_for_status()
-            r = resp.json()
+            # First request lazy-loads the TensorFlow model, which can take ~10-15 s
+            # on a small instance — use a generous timeout + a spinner so it doesn't
+            # look "not connected" while the model warms up.
+            with st.spinner("Running LSTM forecast… (first run loads the model, ~15 s)"):
+                sample = requests.get(f"{base}/sample-request-penang", timeout=10).json()
+                resp = requests.post(f"{base}/predict-penang-network",
+                                     json={"observations": sample["observations"]}, timeout=60)
+                resp.raise_for_status()
+                r = resp.json()
             actual = sample.get("actual_next_avg_d_kbps")
             actual_line = (f'<div style="color:#8b96a5;font-size:.78rem;margin-top:2px">'
                           f'actual next quarter: {actual/1000:.1f} Mbps</div>' if actual else "")
@@ -820,10 +833,11 @@ with panel_col:
                 f'{r["note"]}</div></div>',
                 unsafe_allow_html=True,
             )
-        except Exception as e:
+        except Exception:
             st.warning(
-                f"LSTM API not reachable at {LSTM_API_URL} ({e}). Start it with:\n\n"
-                f"`.venv-ml/Scripts/python.exe -m uvicorn api.main:app --port 8001`"
+                "The LSTM prediction service isn't responding yet — it may still be "
+                "warming up (the model loads on the first request). Please wait a few "
+                "seconds and click **Run Penang prediction** again."
             )
     st.markdown('</div>', unsafe_allow_html=True)
 
