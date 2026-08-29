@@ -85,6 +85,12 @@ jobs:
             docker compose up -d --build
             docker image prune -f
 
+      - name: Extract commit subject
+        id: commit
+        env:
+          FULL_MSG: ${{ github.event.head_commit.message }}
+        run: echo "subject=$(head -n1 <<< "$FULL_MSG")" >> "$GITHUB_OUTPUT"
+
       - name: Notify Telegram
         uses: appleboy/telegram-action@v1.0.1
         with:
@@ -94,6 +100,6 @@ jobs:
           message: |
             ✅ *SiteSense 5G deployed*
             Commit: `${{ github.sha }}`
-            ${{ github.event.head_commit.message }}
+            ${{ steps.commit.outputs.subject }}
             By: ${{ github.actor }}
             [View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
