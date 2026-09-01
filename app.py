@@ -588,9 +588,11 @@ with map_col:
                     "World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}")
     _ESRI_ATTR = "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors"
     if HAVE_LEAFMAP:
+        # leafmap.Map already adds one fullscreen control by default; passing
+        # fullscreen_control=True added a second (duplicate) button, so keep it False.
         m = leafmap.Map(center=_center, zoom=_zoom,
                         draw_control=False, measure_control=False,
-                        fullscreen_control=True)
+                        fullscreen_control=False)
         import folium as _f_base
     else:
         m = folium.Map(location=_center, zoom_start=_zoom, tiles=None)
@@ -598,6 +600,12 @@ with map_col:
     _f_base.TileLayer(_GRAY, name="Light Gray Canvas", control=False, attr=_ESRI_ATTR).add_to(m)
     _f_base.TileLayer(_GRAY_LABELS, name="Labels", control=False, overlay=True,
                       attr=_ESRI_ATTR).add_to(m)
+
+    # Place-name search box (geocoder) — free OpenStreetMap Nominatim, no API key.
+    # UI convenience / extension beyond the bootcamp core (not part of the GeoAI methodology).
+    from folium.plugins import Geocoder
+    Geocoder(collapsed=False, add_marker=True, position="topright",
+             placeholder="Search here").add_to(m)
 
     import folium as _folium  # available via either path
     m.get_root().html.add_child(_folium.Element(LEGEND_HTML))
