@@ -601,13 +601,39 @@ with map_col:
     _f_base.TileLayer(_GRAY_LABELS, name="Labels", control=False, overlay=True,
                       attr=_ESRI_ATTR).add_to(m)
 
+    # Single fullscreen toggle in the TOP-RIGHT corner (leafmap's built-in is off
+    # above to avoid a duplicate; this is the one and only fullscreen button).
+    from folium.plugins import Fullscreen
+    Fullscreen(position="topright").add_to(m)
+
     # Place-name search box (geocoder) — free OpenStreetMap Nominatim, no API key.
     # UI convenience / extension beyond the bootcamp core (not part of the GeoAI methodology).
     from folium.plugins import Geocoder
-    Geocoder(collapsed=False, add_marker=True, position="topright",
+    Geocoder(collapsed=False, add_marker=True, position="topleft",
              placeholder="Search here").add_to(m)
 
     import folium as _folium  # available via either path
+    # The geocoder drops a default Leaflet <img> marker whose icon fails to load
+    # inside st_folium (broken image). Hide just that image marker — the result
+    # name popup still shows, and our own markers are CircleMarker (SVG) / DivIcon
+    # (a <div>), so an <img>-only rule leaves them untouched.
+    m.get_root().html.add_child(_folium.Element(
+        "<style>img.leaflet-marker-icon,img.leaflet-marker-shadow"
+        "{display:none!important;}</style>"))
+    # Lay the top-left controls (zoom + search) in a horizontal row so the search
+    # bar sits beside the zoom buttons — Leaflet stacks same-corner controls
+    # vertically by default.
+    m.get_root().html.add_child(_folium.Element(
+        "<style>.leaflet-top.leaflet-left{display:flex;flex-direction:row;"
+        "align-items:flex-start;}"
+        ".leaflet-top.leaflet-left .leaflet-control{margin-right:8px;}</style>"))
+    # leafmap renders the native zoom control in the top-RIGHT corner. Move its DOM
+    # node into the top-LEFT container (before the search box) so zoom + search sit
+    # together on the left, while the fullscreen button stays alone on the right.
+    m.get_root().html.add_child(_folium.Element(
+        "<script>(function mv(){var tl=document.querySelector('.leaflet-top.leaflet-left');"
+        "var z=document.querySelector('.leaflet-control-zoom');"
+        "if(tl&&z){tl.insertBefore(z,tl.firstChild);}else{setTimeout(mv,100);}})();</script>"))
     m.get_root().html.add_child(_folium.Element(LEGEND_HTML))
     for radio in ["GSM", "UMTS", "LTE", "NR"]:  # draw important ones last (on top)
         sub = fdf[fdf["radio"] == radio]
