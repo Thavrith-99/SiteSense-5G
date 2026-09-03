@@ -597,9 +597,13 @@ with map_col:
     else:
         m = folium.Map(location=_center, zoom_start=_zoom, tiles=None)
         _f_base = folium
-    _f_base.TileLayer(_GRAY, name="Light Gray Canvas", control=False, attr=_ESRI_ATTR).add_to(m)
+    # Esri's Light Gray Canvas only has real tiles up to zoom 16 — past that it serves a
+    # "Map data not yet available" placeholder. Cap the NATIVE zoom at 16 and allow zooming
+    # to 19, so Leaflet upscales the z16 tiles instead of showing those placeholders.
+    _f_base.TileLayer(_GRAY, name="Light Gray Canvas", control=False, attr=_ESRI_ATTR,
+                      max_native_zoom=16, max_zoom=19).add_to(m)
     _f_base.TileLayer(_GRAY_LABELS, name="Labels", control=False, overlay=True,
-                      attr=_ESRI_ATTR).add_to(m)
+                      attr=_ESRI_ATTR, max_native_zoom=16, max_zoom=19).add_to(m)
 
     # Single fullscreen toggle in the TOP-RIGHT corner (leafmap's built-in is off
     # above to avoid a duplicate; this is the one and only fullscreen button).
