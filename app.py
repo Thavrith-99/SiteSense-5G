@@ -613,8 +613,23 @@ with map_col:
     # Place-name search box (geocoder) — free OpenStreetMap Nominatim, no API key.
     # UI convenience / extension beyond the bootcamp core (not part of the GeoAI methodology).
     from folium.plugins import Geocoder
+    # Bias the search to the current study area so it returns the CORRECT local
+    # place, not a same-named kampung in another state. Without this, Nominatim
+    # searches worldwide and can point to Johor/Kedah instead of Penang.
+    # viewbox is a box (~0.6 deg) around the map centre; bounded=1 keeps results
+    # inside it; countrycodes limits to Malaysia (change per country if reused).
+    _lat0, _lon0 = _center[0], _center[1]
+    _viewbox = f"{_lon0 - 0.6},{_lat0 + 0.6},{_lon0 + 0.6},{_lat0 - 0.6}"
+    # htmlTemplate=None disables the plugin's address-component label (which showed
+    # "11300 George Town" instead of the searched name) so results display the full
+    # place name (e.g. "Bukit Bendera, ...").
+    # zoom=15 -> a neighbourhood-level view (~200 m scale) when a result is picked,
+    # instead of the plugin's very tight "fit to result" zoom.
     Geocoder(collapsed=False, add_marker=True, position="topleft",
-             placeholder="Search here").add_to(m)
+             placeholder="Search here", zoom=15,
+             provider_options={"htmlTemplate": None,
+                               "geocodingQueryParams": {
+                 "countrycodes": "my", "viewbox": _viewbox, "bounded": 1}}).add_to(m)
 
     import folium as _folium  # available via either path
     # The geocoder drops a default Leaflet <img> marker whose icon fails to load
@@ -624,6 +639,14 @@ with map_col:
     m.get_root().html.add_child(_folium.Element(
         "<style>img.leaflet-marker-icon,img.leaflet-marker-shadow"
         "{display:none!important;}</style>"))
+    # Keep search results compact: each dropdown row is one line with an ellipsis
+    # (the specific place name comes first), and the result popup is clamped to 2
+    # lines — so long full addresses stay short and easy to scan.
+    m.get_root().html.add_child(_folium.Element(
+        "<style>.leaflet-control-geocoder-alternatives a{white-space:nowrap;"
+        "overflow:hidden;text-overflow:ellipsis;max-width:300px;}"
+        ".leaflet-popup-content{max-width:250px;display:-webkit-box;"
+        "-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}</style>"))
     # Lay the top-left controls (zoom + search) in a horizontal row so the search
     # bar sits beside the zoom buttons — Leaflet stacks same-corner controls
     # vertically by default.
