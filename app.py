@@ -178,6 +178,21 @@ st.markdown(
       }
       .todo { color: #d9a441; }
 
+      /* --- Underserved-places chip list --- */
+      .place-chip-grid {
+        display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;
+      }
+      .place-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        background: #1a140a; border: 1px solid #4d3414; border-radius: 999px;
+        padding: 4px 10px; color: #ffcb8a; font-size: 0.78rem; line-height: 1.3;
+        white-space: nowrap;
+      }
+      .place-chip::before {
+        content: ""; width: 6px; height: 6px; border-radius: 50%;
+        background: #ff9800; flex-shrink: 0;
+      }
+
       /* --- Network-health donut (ANDROMEDA reference) --- */
       .donut-row { display: flex; align-items: center; gap: 16px; margin-top: 10px; }
       .donut { width: 78px; height: 78px; border-radius: 50%; flex-shrink: 0; position: relative; }
@@ -791,9 +806,13 @@ with panel_col:
     )
     if gap["n_uncovered_places"]:
         uncov = ~gap["villages_covered_mask"]
-        names = [n for n in np.asarray(places["name"])[uncov] if n]
+        names = sorted(n for n in np.asarray(places["name"])[uncov] if n)
         with st.expander(f"List {gap['n_uncovered_places']} estimated underserved places"):
-            st.write(", ".join(sorted(names)) or "(unnamed places only)")
+            if names:
+                chips = "".join(f'<span class="place-chip">{n}</span>' for n in names)
+                st.markdown(f'<div class="place-chip-grid">{chips}</div>', unsafe_allow_html=True)
+            else:
+                st.write("(unnamed places only)")
 
     # --- AI insight (Function 3: recommended sites) ---
     if sites:
