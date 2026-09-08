@@ -185,6 +185,79 @@ st.markdown(
       }
       .todo { color: #d9a441; }
 
+      /* Match the Status / Recommendations tab labels to the panel headings
+         (.panel h4): same Montserrat 1.05rem/700. Each tab button is
+         data-testid="stTab" (confirmed against the installed Streamlit build);
+         force it and its label descendants, !important to beat the default. */
+      [data-testid="stTab"],
+      [data-testid="stTab"] * {
+        font-family: 'Montserrat', 'Source Sans Pro', sans-serif !important;
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.01em;
+      }
+
+      /* --- Study-area radio -> modern segmented control ------------------- */
+      /* A binary choice reads better as a segmented toggle than stacked radio
+         circles. Track = dark rounded container; selected segment = brand-teal
+         fill with dark text; radio dots hidden (the fill signals selection). */
+      [data-testid="stRadio"] [role="radiogroup"] {
+        display: inline-flex; flex-wrap: wrap; gap: 0;
+        background: #0f131a; border: 1px solid #2a3242;
+        border-radius: 12px; padding: 4px; margin-top: 2px;
+      }
+      [data-testid="stRadio"] [role="radiogroup"] > label {
+        margin: 0; padding: 8px 20px; border-radius: 9px; cursor: pointer;
+        border: none; background: transparent; transition: all .15s ease;
+      }
+      [data-testid="stRadio"] [role="radiogroup"] > label:hover {
+        background: #1a2130;
+      }
+      /* hide the default radio circle — first child of each option label */
+      [data-testid="stRadio"] [role="radiogroup"] > label > div:first-child {
+        display: none;
+      }
+      [data-testid="stRadio"] [role="radiogroup"] > label p {
+        color: #b7c0cc; font-weight: 600; font-size: 0.92rem;
+      }
+      /* selected segment: brand-teal fill, dark high-contrast text */
+      [data-testid="stRadio"] [role="radiogroup"] > label:has(input:checked) {
+        background: #2dd4bf;
+      }
+      [data-testid="stRadio"] [role="radiogroup"] > label:has(input:checked):hover {
+        background: #34ddc8;
+      }
+      [data-testid="stRadio"] [role="radiogroup"] > label:has(input:checked) p {
+        color: #06251f; font-weight: 700;
+      }
+
+      /* --- Map loading -> just a centered spinner (no label, no card) ------- */
+      /* Size the map column so 50% has a box to measure against while the map
+         reloads, then absolutely-centre only the spinner icon. */
+      .st-key-map_wrap { position: relative; width: 100%; min-height: 790px; }
+      .st-key-map_wrap [data-testid="stVerticalBlock"],
+      .st-key-map_wrap [data-testid="stVerticalBlockBorderWrapper"],
+      .st-key-map_wrap [data-testid="stElementContainer"] {
+        position: static !important;
+      }
+      .st-key-map_wrap [data-testid="stSpinner"] {
+        position: absolute !important; top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 1000; margin: 0; padding: 0;
+        background: transparent !important; border: none !important;
+        box-shadow: none !important; backdrop-filter: none !important;
+      }
+      .st-key-map_wrap [data-testid="stSpinner"] > div {
+        position: static !important; background: transparent !important;
+      }
+      /* hide the "Updating map…" label — keep only the spinner */
+      .st-key-map_wrap [data-testid="stSpinner"] p { display: none !important; }
+      .st-key-map_wrap [data-testid="stSpinnerIcon"] {
+        position: static !important; margin: 0 !important;
+        width: 64px !important; height: 64px !important; border-width: 6px !important;
+        border-top-color: #2dd4bf !important;
+      }
+
       /* --- Underserved-places chip list --- */
       .place-chip-grid {
         display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;
@@ -211,8 +284,12 @@ st.markdown(
       .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
 
       /* --- Site-score gradient bar (Stanfield Land reference) --- */
+      /* Cap the width so the bar reads as a compact score gauge aligned to the
+         text, instead of a thin line stretched across the full-width panel. The
+         marker uses left:%, so it stays correct within the shorter bar. */
       .score-bar {
         position: relative; height: 6px; border-radius: 3px; margin: 5px 0 3px 0;
+        max-width: 460px;
         background: linear-gradient(90deg, #ff1744 0%, #ff9800 50%, #00e676 100%);
       }
       .score-marker {
@@ -605,7 +682,7 @@ if not n_towers:
 # Main: full-width map, with the status / recommendations panel stacked below it
 # (was a right-hand column; moved underneath so the map spans the full width).
 # --------------------------------------------------------------------------
-map_col = st.container()
+map_col = st.container(key="map_wrap")
 panel_col = st.container()
 
 with map_col:
