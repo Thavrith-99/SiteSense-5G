@@ -82,7 +82,7 @@ LEGEND_HTML = """
     position: fixed; bottom: 26px; right: 26px; z-index: 9999;
     background: rgba(17,21,28,0.92); border: 1px solid #232a36; border-radius: 12px;
     padding: 12px 15px; font-family: 'Source Sans Pro', sans-serif;
-    color: #f1f4f8; font-size: 12.5px; line-height: 1.7;
+    color: #f1f4f8; font-size: 13.5px; line-height: 1.9;
     box-shadow: 0 2px 12px rgba(0,0,0,.45);
 ">
   <div style="font-weight:700; margin-bottom:6px; color:#cfd6e0;">Network Legend</div>
@@ -152,29 +152,36 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+      @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&display=swap');
       .block-container { padding-top: 2.6rem; padding-bottom: 1rem;
         padding-left: 1.5rem; padding-right: 1.5rem; max-width: 100%; }
-      .app-title { font-size: 2rem; font-weight: 700; line-height: 1.35;
-        color: #f1f4f8; margin: 0 0 2px 0; padding-top: 4px; }
+      .app-title { font-family: 'Montserrat', 'Source Sans Pro', sans-serif;
+        font-size: 2rem; font-weight: 700; line-height: 1.35;
+        color: #f1f4f8; margin: 0 0 2px 0; padding-top: 4px; letter-spacing: -0.02em; }
       .app-sub { color: #8b96a5; font-size: 0.85rem; margin: 0 0 10px 0; }
       .kpi-card {
         background: #11151c; border: 1px solid #232a36; border-radius: 12px;
-        padding: 14px 16px; height: 100%;
+        padding: 18px 20px; height: 100%;
         box-shadow: 0 2px 8px rgba(0,0,0,.25);
       }
-      .kpi-label { color: #8b96a5; font-size: 0.78rem; text-transform: uppercase;
-        letter-spacing: .04em; margin-bottom: 4px; }
-      .kpi-value { color: #f1f4f8; font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
-      .kpi-sub { color: #6f7b8a; font-size: 0.72rem; margin-top: 2px; }
+      .kpi-label { font-family: 'Montserrat', 'Source Sans Pro', sans-serif;
+        color: #8b96a5; font-size: 0.8rem; text-transform: uppercase;
+        letter-spacing: .05em; margin-bottom: 8px; }
+      .kpi-value { font-family: 'Montserrat', 'Source Sans Pro', sans-serif;
+        color: #ffffff; font-size: 2.6rem; font-weight: 800; line-height: 1.02;
+        letter-spacing: -0.02em; }
+      .kpi-sub { color: #6f7b8a; font-size: 0.74rem; margin-top: 6px; }
       .panel {
         background: #11151c; border: 1px solid #232a36; border-radius: 12px;
         padding: 14px 16px; margin-bottom: 12px;
         box-shadow: 0 2px 8px rgba(0,0,0,.25);
       }
-      .panel h4 { margin: 0 0 8px 0; font-size: 0.9rem; color: #cfd6e0; }
+      .panel h4 { font-family: 'Montserrat', 'Source Sans Pro', sans-serif;
+        margin: 0 0 8px 0; font-size: 1.05rem; font-weight: 700; color: #cfd6e0;
+        letter-spacing: -0.01em; }
       .ai-insight {
         background: #0e1a17; border: 1px solid #1c3b32; border-radius: 10px;
-        padding: 12px 14px; color: #bfe8d8; font-size: 0.85rem;
+        padding: 14px 16px; color: #bfe8d8; font-size: 0.98rem; line-height: 1.5;
       }
       .todo { color: #d9a441; }
 
@@ -199,7 +206,7 @@ st.markdown(
       .donut::after {
         content: ""; position: absolute; inset: 11px; border-radius: 50%; background: #11151c;
       }
-      .donut-legend { font-size: .74rem; color: #b7c0cc; line-height: 1.9; }
+      .donut-legend { font-size: .88rem; color: #b7c0cc; line-height: 1.9; }
       .donut-legend b { color: #f1f4f8; }
       .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
 
@@ -255,6 +262,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 # Interactive telecom-network canvas (login page only). The component runs in a
@@ -444,7 +452,7 @@ def donut_widget(good: int, warn: int, err: int) -> str:
         f'<div class="donut-legend">'
         f'<span class="dot" style="background:#00e676"></span>low <b>{good:,}</b><br>'
         f'<span class="dot" style="background:#ff9800"></span>medium <b>{warn:,}</b><br>'
-        f'<span class="dot" style="background:#ff1744"></span>high <b>{err:,}</b>'
+        f'<span class="dot" style="background:#ff1744"></span>severe <b>{err:,}</b>'
         f'</div></div>'
     )
 
@@ -497,41 +505,40 @@ with st.sidebar:
              "implausibly large reported range.",
     )
 
-    load_p = st.slider(
-        "High-demand threshold (sample percentile)", 50, 99, 90, step=1,
-        help="Cells above this 'samples' percentile are flagged as high-demand — a "
-             "demand proxy from test/sample counts, not measured operator load.",
-    )
+    st.divider()
+    with st.expander("Advanced settings & recommendations", expanded=False):
+        load_p = st.slider(
+            "High-demand threshold (sample percentile)", 50, 99, 90, step=1,
+            help="Cells above this 'samples' percentile are flagged as high-demand — a "
+                 "demand proxy from test/sample counts, not measured operator load.",
+        )
+        show_coverage = st.checkbox("Show coverage footprints", value=False,
+                                    help="Draw each cell's range as a circle (slower).")
+        show_gaps = st.checkbox("Show estimated underserved villages", value=True,
+                                help="Marks OSM places outside every tower's estimated coverage "
+                                     "footprint (OpenCelliD reported range) — not verified operator "
+                                     "coverage data.")
 
-    show_coverage = st.checkbox("Show coverage footprints", value=False,
-                                help="Draw each cell's range as a circle (slower).")
-    show_gaps = st.checkbox("Show estimated underserved villages", value=True,
-                            help="Marks OSM places outside every tower's estimated coverage "
-                                 "footprint (OpenCelliD reported range) — not verified operator "
-                                 "coverage data.")
-
-    st.markdown("### Preliminary new-site recommendations")
-    weight_profile = st.selectbox(
-        "Site-scoring profile", list(rec.WEIGHT_PROFILES.keys()), index=0,
-        help="Weighted multi-criteria scoring (population reached, backhaul "
-             "proximity to existing towers, overloaded-tower relief). "
-             "'Coverage-first' reproduces the original population-only ranking. "
-             "Weights are team-set/expert-judgement, not learned from data.",
-    )
-    with st.expander("Profile weights"):
+        st.markdown("**Preliminary new-site recommendations**")
+        weight_profile = st.selectbox(
+            "Site-scoring profile", list(rec.WEIGHT_PROFILES.keys()), index=0,
+            help="Weighted multi-criteria scoring (population reached, backhaul "
+                 "proximity to existing towers, overloaded-tower relief). "
+                 "'Coverage-first' reproduces the original population-only ranking. "
+                 "Weights are team-set/expert-judgement, not learned from data.",
+        )
         w = rec.WEIGHT_PROFILES[weight_profile]
-        st.write(f"Population reached: **{w['population']:.0%}** · "
-                f"Backhaul proximity: **{w['backhaul']:.0%}** · "
-                f"Overload relief: **{w['overload']:.0%}** · "
-                f"Slope penalty: **{w['slope']:.0%}**")
-        st.caption("Backhaul proximity to an existing tower is used as a rough cost "
-                  "proxy above the ranking; each site's estimated capex (below) uses "
-                  "a real cited industry benchmark instead. Slope uses real SRTM "
-                  "elevation data. Weights are team-set/expert-judgement, not learned.")
-    new_range = st.slider("New 5G tower range (m)", 300, 3000, 1700, step=100,
-                          help="Assumed coverage radius of a new 5G tower.")
-    n_sites = st.slider("Sites to recommend", 1, 15, 5)
-    show_sites = st.checkbox("Show preliminary recommended sites", value=True)
+        st.caption(
+            f"Weights — Population {w['population']:.0%} · Backhaul {w['backhaul']:.0%} · "
+            f"Overload {w['overload']:.0%} · Slope {w['slope']:.0%}. "
+            "Backhaul proximity is a rough cost proxy in the ranking; each site's capex uses a "
+            "cited industry benchmark instead. Slope uses real SRTM elevation. Weights are "
+            "team-set/expert-judgement, not learned."
+        )
+        new_range = st.slider("New 5G tower range (m)", 300, 3000, 1700, step=100,
+                              help="Assumed coverage radius of a new 5G tower.")
+        n_sites = st.slider("Sites to recommend", 1, 15, 5)
+        show_sites = st.checkbox("Show preliminary recommended sites", value=True)
 
     st.divider()
     st.caption(
@@ -566,9 +573,7 @@ sites = compute_sites(scope, tuple(sorted(picked)), int(max_range), int(load_p),
 # --------------------------------------------------------------------------
 st.markdown(
     f'<div class="app-title">SiteSense 5G — Coverage &amp; Site-Selection Overview</div>'
-    f'<div class="app-sub">{scope} pilot ({SCOPES[scope]["note"]}) · fuse towers + '
-    f'population + settlements → an estimated coverage gap and preliminary new-site picks '
-    f'(not verified operator coverage)</div>',
+    f'<div class="app-sub">{scope} pilot — estimated coverage gap &amp; preliminary new-site picks · open data, not verified operator coverage</div>',
     unsafe_allow_html=True,
 )
 
@@ -586,10 +591,22 @@ kpi_card(k4, "Est. high-demand cells", f"{n_overloaded:,}", overloaded_sub, icon
 
 st.write("")
 
+# Empty-state guard: if the current filters leave zero cells, tell the user how
+# to recover instead of showing four blank "0" tiles and an empty map.
+if not n_towers:
+    st.warning(
+        "No cells match the current filters. Widen **Network generation** "
+        "(e.g. include 4G) or increase **Max coverage range** in the sidebar to "
+        "see results.",
+        icon="🔍",
+    )
+
 # --------------------------------------------------------------------------
-# Main: map (left) + status panel (right)
+# Main: full-width map, with the status / recommendations panel stacked below it
+# (was a right-hand column; moved underneath so the map spans the full width).
 # --------------------------------------------------------------------------
-map_col, panel_col = st.columns([3, 1], gap="small")
+map_col = st.container()
+panel_col = st.container()
 
 with map_col:
     _center = SCOPES[scope]["center"]
@@ -754,186 +771,204 @@ with map_col:
                 ),
             ).add_to(m)
 
-    st_folium(m, use_container_width=True, height=960, returned_objects=[])
+    # Default view on refresh: frame the whole study area by fitting the map to
+    # the bounds of the cells currently in view (a small pad keeps edge markers
+    # off the border). Falls back to the scope's center/zoom when the filter is
+    # empty. fit_bounds runs after init, so it sets the initial framing.
+    if len(fdf):
+        _pad = 0.02
+        m.fit_bounds([[float(fdf["lat"].min()) - _pad, float(fdf["lon"].min()) - _pad],
+                      [float(fdf["lat"].max()) + _pad, float(fdf["lon"].max()) + _pad]])
+
+    with st.spinner("Updating map…"):
+        # Height chosen so the whole map + its bottom-right Network Legend fit a
+        # typical laptop / 1080p viewport without scrolling (header + KPI row take
+        # ~250px above). fit_bounds still frames all data at this height.
+        st_folium(m, use_container_width=True, height=790, returned_objects=[])
 
 with panel_col:
-    # --- Status (network-health donut, ANDROMEDA-style) ---
-    # "Good" = under the overload threshold; "Warning" = overloaded but under
-    # 2x threshold; "Error" = severely overloaded (>= 2x threshold) — reuses
-    # the same load_threshold Function 2 already computes, just bucketed.
-    if n_towers:
-        n_error = int((fdf["samples"] >= load_threshold * 2).sum())
-        n_warning = n_overloaded - n_error
-        n_good = n_towers - n_overloaded
-    else:
-        n_good = n_warning = n_error = 0
-    st.markdown(
-        f'<div class="panel"><h4>Status</h4>'
-        f'<div style="color:#8b96a5;font-size:.8rem">Cells in view</div>'
-        f'<div style="color:#f1f4f8;font-size:1.3rem;font-weight:700">{n_towers:,}</div>'
-        f'<div style="margin-top:6px">'
-        f'<span style="color:#1e88e5">● 4G {n_4g:,}</span>&nbsp;&nbsp;'
-        f'<span style="color:#e53935">● 5G {n_5g:,}</span>&nbsp;&nbsp;'
-        f'<span style="color:#ff1744">● high-demand {n_overloaded:,}</span>'
-        f'</div>'
-        f'{donut_widget(n_good, n_warning, n_error)}'
-        f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'
-        f'Estimated demand pressure vs. the {load_p}th-percentile sample threshold '
-        f'(medium &lt; 2× · high ≥ 2×) — a demand proxy, not measured tower load.</div>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
+    tab_status, tab_rec = st.tabs(["Status", "Recommendations"])
 
-    # NOTE: a separate "Flagged towers" detail table used to live here
-    # (Function 2). Removed as redundant for the live pitch — the overloaded
-    # count is already shown above (Status panel "hot" count) and in the
-    # "Overloaded towers" KPI card, and per-site relief is called out in the
-    # AI Insights panel below ("relieves N overloaded tower(s)").
-
-    # --- Coverage gap (Function 1) ---
-    st.markdown(
-        f'<div class="panel"><h4>{ICON["chart"]}Estimated coverage gap (4G/5G)</h4>'
-        f'<div style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
-        f'{gap["uncovered_pop"]:,.0f}</div>'
-        f'<div style="color:#8b96a5;font-size:.78rem">people in estimated underserved areas · '
-        f'{100 - gap["pct_covered"]:.1f}% of the estimated {scope} population</div>'
-        f'<div style="margin-top:8px;color:#ff9800">● {gap["n_uncovered_places"]} '
-        f'villages/kampungs — estimated underserved</div>'
-        f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'
-        f'Estimated from each cell\'s reported OpenCelliD range, not verified operator '
-        f'coverage data.</div></div>',
-        unsafe_allow_html=True,
-    )
-    if gap["n_uncovered_places"]:
-        uncov = ~gap["villages_covered_mask"]
-        names = sorted(n for n in np.asarray(places["name"])[uncov] if n)
-        with st.expander(f"List {gap['n_uncovered_places']} estimated underserved places"):
-            if names:
-                chips = "".join(f'<span class="place-chip">{n}</span>' for n in names)
-                st.markdown(f'<div class="place-chip-grid">{chips}</div>', unsafe_allow_html=True)
-            else:
-                st.write("(unnamed places only)")
-
-    # --- AI insight (Function 3: recommended sites) ---
-    if sites:
-        covered_total = sites[-1]["cumulative_gained"]
-        pct_gap = covered_total / gap["uncovered_pop"] * 100 if gap["uncovered_pop"] else 0
-        PHASE_COLOR = {1: "#00e676", 2: "#ff9800", 3: "#7f8a99"}
-        cards = [
-            f'<div style="margin:6px 0;padding-bottom:6px;'
-            f'border-bottom:1px solid #1c3b32">'
-            f'<b style="color:#00e676">#{s["rank"]}</b> '
-            f'<span style="color:{PHASE_COLOR.get(s.get("phase"), "#7f8a99")};font-size:.72rem;'
-            f'border:1px solid currentColor;border-radius:4px;padding:0 4px;margin-left:4px">'
-            f'Phase {s.get("phase", "?")}</span>'
-            f'<div class="score-bar"><div class="score-marker" '
-            f'style="left:{max(0.0, min(1.0, s.get("score", 0.0))) * 100:.1f}%"></div></div>'
-            f'+{s["people_gained"]:,.0f} people'
-            f'{f" · relieves {s['overloaded_relieved']} high-demand" if s["overloaded_relieved"] else ""}'
-            f'{f" · {s['backhaul_distance_m']:,.0f} m to nearest existing tower" if s.get("backhaul_distance_m") is not None else ""}'
-            f'{f" · {s['slope_deg']:.1f}° slope" if s.get("slope_deg") is not None else ""}'
-            f'<br><span style="color:#8b96a5;font-size:.72rem">'
-            f'est. ${s["est_capex_usd"]:,.0f} · {s["people_per_1000usd"]:.1f} people per $1,000</span>'
-            f'<br><span style="color:#7f8a99;font-size:.75rem">'
-            f'{s["lat"]:.4f}, {s["lon"]:.4f}</span></div>'
-            for s in sites
-        ]
-        rows_first = "".join(cards[:3])
-        rows_rest = "".join(cards[3:])
-        more_html = ""
-        if len(cards) > 3:
-            more_html = (
-                '<details style="margin-top:2px">'
-                '<summary style="cursor:pointer;color:#22d3ee;font-size:.78rem;'
-                'padding:6px 0 2px 0">'
-                f'Show {len(cards) - 3} more sites</summary>'
-                f'<div style="margin-top:4px">{rows_rest}</div></details>'
-            )
-        total_cost = sum(s["est_capex_usd"] for s in sites)
+    with tab_status:
+        # --- Status (network-health donut, ANDROMEDA-style) ---
+        # "Good" = under the overload threshold; "Warning" = overloaded but under
+        # 2x threshold; "Error" = severely overloaded (>= 2x threshold) — reuses
+        # the same load_threshold Function 2 already computes, just bucketed.
+        if n_towers:
+            n_error = int((fdf["samples"] >= load_threshold * 2).sum())
+            n_warning = n_overloaded - n_error
+            n_good = n_towers - n_overloaded
+        else:
+            n_good = n_warning = n_error = 0
         st.markdown(
-            f'<div class="panel"><h4>{ICON["bulb"]}AI Insights — preliminary 5G site recommendations</h4>'
-            f'<div class="ai-insight">These <b>{len(sites)}</b> preliminary candidate sites '
-            f'(range {new_range} m, <b>{weight_profile}</b> profile, est. total capex '
-            f'<b>${total_cost:,.0f}</b>) could potentially reach an estimated '
-            f'<b>{covered_total:,.0f}</b> of the {gap["uncovered_pop"]:,.0f} people in estimated '
-            f'underserved areas (<b>{pct_gap:.0f}%</b> of the gap) — a preliminary ranking, not '
-            f'final tower locations (RF, cost, land &amp; regulatory checks still required).'
-            f'<div style="margin-top:8px">{rows_first}</div>{more_html}'
-            f'<div style="margin-top:8px;color:#5b6472;font-size:.68rem;font-style:italic">'
-            f'Weighted multi-criteria score: population reached (WorldPop) · backhaul proximity '
-            f'(cost proxy — distance to nearest OpenCelliD tower) · demand-pressure relief (proxy — '
-            f'nearby high-sample cells) · SRTM slope (buildability proxy). Weights are '
-            f'team-set/expert-judgement, not learned from data. Capex = $150k base + $62.5k/km '
-            f'backhaul fiber (industry benchmark, PatentPC 2026 — order-of-magnitude estimate, not a '
-            f'site-specific quote). '
-            f'Phase = rollout order by cost-efficiency (people reached per dollar), not selection '
-            f'rank. Slope is a buildability proxy, not a full RF propagation model.'
-            f'</div></div></div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            f'<div class="panel"><h4>{ICON["bulb"]}AI Insights</h4>'
-            '<div class="ai-insight">No estimated coverage gap to close in the current '
-            'filter.</div></div>',
+            f'<div class="panel"><h4>Status</h4>'
+            f'<div style="color:#8b96a5;font-size:.8rem">Cells in view</div>'
+            f'<div style="color:#f1f4f8;font-size:1.3rem;font-weight:700">{n_towers:,}</div>'
+            f'<div style="margin-top:6px">'
+            f'<span style="color:#1e88e5">● 4G {n_4g:,}</span>&nbsp;&nbsp;'
+            f'<span style="color:#e53935">● 5G {n_5g:,}</span>&nbsp;&nbsp;'
+            f'<span style="color:#ff1744">● high-demand {n_overloaded:,}</span>'
+            f'</div>'
+            f'{donut_widget(n_good, n_warning, n_error)}'
+            f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'
+            f'Estimated demand pressure vs. the {load_p}th-percentile sample threshold '
+            f'(medium &lt; 2× · severe ≥ 2×) — a demand proxy, not measured tower load.</div>'
+            f'</div>',
             unsafe_allow_html=True,
         )
 
-    # --- Bonus: LSTM network-trend demo, real Penang data ------------------
-    # Calls the separate FastAPI service over HTTP (not in-process) — the
-    # Streamlit app stays free of the heavy TensorFlow dependency, matching
-    # the finale's Streamlit-frontend / FastAPI-service split. Trained on
-    # real Penang tile history (Ookla Open Data, quarterly) — no
-    # KL-transfer-learning caveat needed, this model has actually seen
-    # Penang. See ml/train_lstm_penang.py for the KL-vs-Penang mapping.
-    st.markdown(f'<div class="panel"><h4>{ICON["trend"]}LSTM Network-Trend Demo (Penang, real data)</h4>',
-               unsafe_allow_html=True)
-    st.caption("Deployable ML pipeline demo — predicts next quarter's average mobile "
-              "download throughput for a real Penang map tile from its last 4 quarters "
-              "of real measurements (Ookla Open Data). Separate FastAPI service, not "
-              "part of the coverage/site-recommendation logic above.")
-    if st.button("▶ Run Penang prediction", key="lstm_penang_btn"):
-        try:
-            import requests
-            base = LSTM_API_URL
-            # First request lazy-loads the TensorFlow model, which can take ~10-15 s
-            # on a small instance — use a generous timeout + a spinner so it doesn't
-            # look "not connected" while the model warms up.
-            with st.spinner("Running LSTM forecast… (first run loads the model, ~15 s)"):
-                sample = requests.get(f"{base}/sample-request-penang", timeout=10).json()
-                resp = requests.post(f"{base}/predict-penang-network",
-                                     json={"observations": sample["observations"]}, timeout=60)
-                resp.raise_for_status()
-                r = resp.json()
-            actual = sample.get("actual_next_avg_d_kbps")
-            actual_line = (f'<div style="color:#8b96a5;font-size:.78rem;margin-top:2px">'
-                          f'actual next quarter: {actual/1000:.1f} Mbps</div>' if actual else "")
+        # NOTE: a separate "Flagged towers" detail table used to live here
+        # (Function 2). Removed as redundant for the live pitch — the overloaded
+        # count is already shown above (Status panel "hot" count) and in the
+        # "Overloaded towers" KPI card, and per-site relief is called out in the
+        # AI Insights panel below ("relieves N overloaded tower(s)").
+
+        # --- Coverage gap (Function 1) ---
+        st.markdown(
+            f'<div class="panel"><h4>{ICON["chart"]}Estimated coverage gap (4G/5G)</h4>'
+            f'<div style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
+            f'{gap["uncovered_pop"]:,.0f}</div>'
+            f'<div style="color:#8b96a5;font-size:.78rem">people in estimated underserved areas · '
+            f'{100 - gap["pct_covered"]:.1f}% of the estimated {scope} population</div>'
+            f'<div style="margin-top:8px;color:#ff9800">● {gap["n_uncovered_places"]} '
+            f'villages/kampungs — estimated underserved</div>'
+            f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'
+            f'Estimated from each cell\'s reported OpenCelliD range, not verified operator '
+            f'coverage data.</div></div>',
+            unsafe_allow_html=True,
+        )
+        if gap["n_uncovered_places"]:
+            uncov = ~gap["villages_covered_mask"]
+            names = sorted(n for n in np.asarray(places["name"])[uncov] if n)
+            with st.expander(f"List {gap['n_uncovered_places']} estimated underserved places"):
+                if names:
+                    chips = "".join(f'<span class="place-chip">{n}</span>' for n in names)
+                    st.markdown(f'<div class="place-chip-grid">{chips}</div>', unsafe_allow_html=True)
+                else:
+                    st.write("(unnamed places only)")
+
+
+    with tab_rec:
+        # --- AI insight (Function 3: recommended sites) ---
+        if sites:
+            covered_total = sites[-1]["cumulative_gained"]
+            pct_gap = covered_total / gap["uncovered_pop"] * 100 if gap["uncovered_pop"] else 0
+            PHASE_COLOR = {1: "#00e676", 2: "#ff9800", 3: "#7f8a99"}
+            cards = [
+                f'<div style="margin:6px 0;padding-bottom:6px;'
+                f'border-bottom:1px solid #1c3b32">'
+                f'<b style="color:#00e676">#{s["rank"]}</b> '
+                f'<span style="color:{PHASE_COLOR.get(s.get("phase"), "#7f8a99")};font-size:.72rem;'
+                f'border:1px solid currentColor;border-radius:4px;padding:0 4px;margin-left:4px">'
+                f'Phase {s.get("phase", "?")}</span>'
+                f'<div class="score-bar"><div class="score-marker" '
+                f'style="left:{max(0.0, min(1.0, s.get("score", 0.0))) * 100:.1f}%"></div></div>'
+                f'+{s["people_gained"]:,.0f} people'
+                f'{f" · relieves {s['overloaded_relieved']} high-demand" if s["overloaded_relieved"] else ""}'
+                f'{f" · {s['backhaul_distance_m']:,.0f} m to nearest existing tower" if s.get("backhaul_distance_m") is not None else ""}'
+                f'{f" · {s['slope_deg']:.1f}° slope" if s.get("slope_deg") is not None else ""}'
+                f'<br><span style="color:#8b96a5;font-size:.85rem">'
+                f'est. ${s["est_capex_usd"]:,.0f} · {s["people_per_1000usd"]:.1f} people per $1,000</span>'
+                f'<br><span style="color:#7f8a99;font-size:.85rem">'
+                f'{s["lat"]:.4f}, {s["lon"]:.4f}</span></div>'
+                for s in sites
+            ]
+            rows_first = "".join(cards[:3])
+            rows_rest = "".join(cards[3:])
+            more_html = ""
+            if len(cards) > 3:
+                more_html = (
+                    '<details style="margin-top:2px">'
+                    '<summary style="cursor:pointer;color:#22d3ee;font-size:.78rem;'
+                    'padding:6px 0 2px 0">'
+                    f'Show {len(cards) - 3} more sites</summary>'
+                    f'<div style="margin-top:4px">{rows_rest}</div></details>'
+                )
+            total_cost = sum(s["est_capex_usd"] for s in sites)
             st.markdown(
-                f'<div style="margin-top:4px">'
-                f'<span style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
-                f'{r["predicted_mbps"]} Mbps</span>&nbsp;&nbsp;'
-                f'<span style="color:#00e676">● predicted download</span>'
-                f'{actual_line}'
-                f'<div style="color:#8b96a5;font-size:.78rem;margin-top:4px">'
-                f'tile {sample["quadkey"]} · {r["response_time_ms"]:.0f} ms · {r["model_version"]}</div>'
-                f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'
-                f'{r["note"]}</div></div>',
+                f'<div class="panel"><h4>{ICON["bulb"]}AI Insights — preliminary 5G site recommendations</h4>'
+                f'<div class="ai-insight">These <b>{len(sites)}</b> preliminary candidate sites '
+                f'(range {new_range} m, <b>{weight_profile}</b> profile, est. total capex '
+                f'<b>${total_cost:,.0f}</b>) could potentially reach an estimated '
+                f'<b>{covered_total:,.0f}</b> of the {gap["uncovered_pop"]:,.0f} people in estimated '
+                f'underserved areas (<b>{pct_gap:.0f}%</b> of the gap) — a preliminary ranking, not '
+                f'final tower locations (RF, cost, land &amp; regulatory checks still required).'
+                f'<div style="margin-top:8px">{rows_first}</div>{more_html}'
+                f'<div style="margin-top:8px;color:#5b6472;font-size:.68rem;font-style:italic">'
+                f'Weighted multi-criteria score: population reached (WorldPop) · backhaul proximity '
+                f'(cost proxy — distance to nearest OpenCelliD tower) · demand-pressure relief (proxy — '
+                f'nearby high-sample cells) · SRTM slope (buildability proxy). Weights are '
+                f'team-set/expert-judgement, not learned from data. Capex = $150k base + $62.5k/km '
+                f'backhaul fiber (industry benchmark, PatentPC 2026 — order-of-magnitude estimate, not a '
+                f'site-specific quote). '
+                f'Phase = rollout order by cost-efficiency (people reached per dollar), not selection '
+                f'rank. Slope is a buildability proxy, not a full RF propagation model.'
+                f'</div></div></div>',
                 unsafe_allow_html=True,
             )
-        except Exception:
-            st.warning(
-                "The LSTM prediction service isn't responding yet — it may still be "
-                "warming up (the model loads on the first request). Please wait a few "
-                "seconds and click **Run Penang prediction** again."
+        else:
+            st.markdown(
+                f'<div class="panel"><h4>{ICON["bulb"]}AI Insights</h4>'
+                '<div class="ai-insight">No estimated coverage gap to close in the current '
+                'filter.</div></div>',
+                unsafe_allow_html=True,
             )
-    st.markdown('</div>', unsafe_allow_html=True)
 
-    # NOTE: an earlier KL-trained signal-quality LSTM demo panel used to live
-    # here. Removed from the live dashboard (2026-08-20, user request) as
-    # unnecessary for the finale demo now that the Penang model above exists —
-    # the KL model/training script/notebook are kept in the repo (ml/) and
-    # api/main.py's /predict-rsrp endpoint still works if referenced in Q&A,
-    # just not shown in the UI.
+        # --- Bonus: LSTM network-trend demo, real Penang data ------------------
+        # Calls the separate FastAPI service over HTTP (not in-process) — the
+        # Streamlit app stays free of the heavy TensorFlow dependency, matching
+        # the finale's Streamlit-frontend / FastAPI-service split. Trained on
+        # real Penang tile history (Ookla Open Data, quarterly) — no
+        # KL-transfer-learning caveat needed, this model has actually seen
+        # Penang. See ml/train_lstm_penang.py for the KL-vs-Penang mapping.
+        st.markdown(f'<div class="panel"><h4>{ICON["trend"]}LSTM Network-Trend Demo (Penang, real data)</h4>',
+                   unsafe_allow_html=True)
+        st.caption("Deployable ML pipeline demo — predicts next quarter's average mobile "
+                  "download throughput for a real Penang map tile from its last 4 quarters "
+                  "of real measurements (Ookla Open Data). Separate FastAPI service, not "
+                  "part of the coverage/site-recommendation logic above.")
+        if st.button("▶ Run Penang prediction", key="lstm_penang_btn"):
+            try:
+                import requests
+                base = LSTM_API_URL
+                # First request lazy-loads the TensorFlow model, which can take ~10-15 s
+                # on a small instance — use a generous timeout + a spinner so it doesn't
+                # look "not connected" while the model warms up.
+                with st.spinner("Running LSTM forecast… (first run loads the model, ~15 s)"):
+                    sample = requests.get(f"{base}/sample-request-penang", timeout=10).json()
+                    resp = requests.post(f"{base}/predict-penang-network",
+                                         json={"observations": sample["observations"]}, timeout=60)
+                    resp.raise_for_status()
+                    r = resp.json()
+                actual = sample.get("actual_next_avg_d_kbps")
+                actual_line = (f'<div style="color:#8b96a5;font-size:.78rem;margin-top:2px">'
+                              f'actual next quarter: {actual/1000:.1f} Mbps</div>' if actual else "")
+                st.markdown(
+                    f'<div style="margin-top:4px">'
+                    f'<span style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
+                    f'{r["predicted_mbps"]} Mbps</span>&nbsp;&nbsp;'
+                    f'<span style="color:#00e676">● predicted download</span>'
+                    f'{actual_line}'
+                    f'<div style="color:#8b96a5;font-size:.78rem;margin-top:4px">'
+                    f'tile {sample["quadkey"]} · {r["response_time_ms"]:.0f} ms · {r["model_version"]}</div>'
+                    f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'
+                    f'{r["note"]}</div></div>',
+                    unsafe_allow_html=True,
+                )
+            except Exception:
+                st.warning(
+                    "The LSTM prediction service isn't responding yet — it may still be "
+                    "warming up (the model loads on the first request). Please wait a few "
+                    "seconds and click **Run Penang prediction** again."
+                )
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # NOTE: an earlier KL-trained signal-quality LSTM demo panel used to live
+        # here. Removed from the live dashboard (2026-08-20, user request) as
+        # unnecessary for the finale demo now that the Penang model above exists —
+        # the KL model/training script/notebook are kept in the repo (ml/) and
+        # api/main.py's /predict-rsrp endpoint still works if referenced in Q&A,
+        # just not shown in the UI.
 
 st.caption(
     "Function 1 (estimated underserved population/kampungs) ✓ · Function 2 (overloaded flags) ✓ "
