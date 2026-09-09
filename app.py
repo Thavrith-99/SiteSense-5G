@@ -183,6 +183,61 @@ st.markdown(
         background: #0e1a17; border: 1px solid #1c3b32; border-radius: 10px;
         padding: 14px 16px; color: #bfe8d8; font-size: 0.98rem; line-height: 1.5;
       }
+
+      /* --- Recommendations panel (Function 3 hero) ----------------------- */
+      .rec-summary { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0 10px 0; }
+      .rec-stat {
+        flex: 1 1 130px; background: #0b1512; border: 1px solid #1c3b32;
+        border-radius: 12px; padding: 13px 16px;
+      }
+      .rec-stat-value {
+        font-family: 'Montserrat', 'Source Sans Pro', sans-serif;
+        font-size: 1.85rem; font-weight: 800; color: #00e676;
+        line-height: 1.02; letter-spacing: -0.02em;
+      }
+      .rec-stat-label {
+        color: #8b96a5; font-size: 0.72rem; text-transform: uppercase;
+        letter-spacing: 0.04em; margin-top: 5px;
+      }
+      .rec-context { color: #9aa6b4; font-size: 0.86rem; margin: 0 0 6px 0; }
+      .rec-context b { color: #e6ebf2; }
+      .rec-card { padding: 13px 0; border-bottom: 1px solid #14231d; }
+      .rec-card:last-child { border-bottom: none; }
+      .rec-card-head { display: flex; align-items: center; gap: 10px; }
+      .rec-rank {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+        background: #00e676; color: #04160b; font-weight: 800; font-size: 0.95rem;
+        font-family: 'Montserrat', 'Source Sans Pro', sans-serif;
+      }
+      .rec-phase {
+        font-size: 0.68rem; border: 1px solid currentColor; border-radius: 5px;
+        padding: 2px 7px; font-weight: 700; letter-spacing: 0.02em;
+      }
+      .rec-people {
+        margin-left: auto; display: inline-flex; align-items: baseline; gap: 5px;
+        font-family: 'Montserrat', 'Source Sans Pro', sans-serif;
+        font-size: 1.25rem; font-weight: 800; color: #eafff0; letter-spacing: -0.01em;
+      }
+      .rec-people-unit { font-size: 0.76rem; font-weight: 600; color: #8b96a5; letter-spacing: 0; }
+      .rec-metrics {
+        display: flex; flex-wrap: wrap; gap: 5px 16px; margin: 8px 0 6px 0;
+        color: #b7c0cc; font-size: 0.85rem;
+      }
+      .rec-metric b { color: #f1f4f8; font-weight: 700; }
+      .rec-cost { color: #8b96a5; font-size: 0.85rem; }
+      .rec-cost b { color: #bfe8d8; }
+      .rec-coord { color: #5b6472; }
+      .rec-more { margin-top: 6px; }
+      .rec-more > summary {
+        cursor: pointer; color: #22d3ee; font-size: 0.85rem; font-weight: 600;
+        padding: 10px 0 2px 0;
+      }
+      .rec-more > summary:hover { color: #4fe0f5; }
+      .rec-note {
+        margin-top: 12px; color: #5b6472; font-size: 0.68rem; font-style: italic;
+        line-height: 1.5;
+      }
       .todo { color: #d9a441; }
 
       /* Match the Status / Recommendations tab labels to the panel headings
@@ -260,12 +315,13 @@ st.markdown(
 
       /* --- Underserved-places chip list --- */
       .place-chip-grid {
-        display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;
+        display: flex; flex-wrap: wrap; align-content: flex-start; gap: 12px;
+        margin-top: 6px; padding: 16px 14px 20px 14px; min-height: 170px;
       }
       .place-chip {
-        display: inline-flex; align-items: center; gap: 5px;
+        display: inline-flex; align-items: center; gap: 6px;
         background: #1a140a; border: 1px solid #4d3414; border-radius: 999px;
-        padding: 4px 10px; color: #ffcb8a; font-size: 0.78rem; line-height: 1.3;
+        padding: 8px 15px; color: #ffcb8a; font-size: 0.9rem; line-height: 1.3;
         white-space: nowrap;
       }
       .place-chip::before {
@@ -930,57 +986,74 @@ with panel_col:
         if sites:
             covered_total = sites[-1]["cumulative_gained"]
             pct_gap = covered_total / gap["uncovered_pop"] * 100 if gap["uncovered_pop"] else 0
+            total_cost = sum(s["est_capex_usd"] for s in sites)
             PHASE_COLOR = {1: "#00e676", 2: "#ff9800", 3: "#7f8a99"}
-            cards = [
-                f'<div style="margin:6px 0;padding-bottom:6px;'
-                f'border-bottom:1px solid #1c3b32">'
-                f'<b style="color:#00e676">#{s["rank"]}</b> '
-                f'<span style="color:{PHASE_COLOR.get(s.get("phase"), "#7f8a99")};font-size:.72rem;'
-                f'border:1px solid currentColor;border-radius:4px;padding:0 4px;margin-left:4px">'
-                f'Phase {s.get("phase", "?")}</span>'
-                f'<div class="score-bar"><div class="score-marker" '
-                f'style="left:{max(0.0, min(1.0, s.get("score", 0.0))) * 100:.1f}%"></div></div>'
-                f'+{s["people_gained"]:,.0f} people'
-                f'{f" · relieves {s['overloaded_relieved']} high-demand" if s["overloaded_relieved"] else ""}'
-                f'{f" · {s['backhaul_distance_m']:,.0f} m to nearest existing tower" if s.get("backhaul_distance_m") is not None else ""}'
-                f'{f" · {s['slope_deg']:.1f}° slope" if s.get("slope_deg") is not None else ""}'
-                f'<br><span style="color:#8b96a5;font-size:.85rem">'
-                f'est. ${s["est_capex_usd"]:,.0f} · {s["people_per_1000usd"]:.1f} people per $1,000</span>'
-                f'<br><span style="color:#7f8a99;font-size:.85rem">'
-                f'{s["lat"]:.4f}, {s["lon"]:.4f}</span></div>'
-                for s in sites
-            ]
+            cap_disp = (f"${total_cost / 1e6:.2f}M" if total_cost >= 1e6
+                        else f"${total_cost / 1e3:.0f}k")
+
+            # Build each site as a structured ranked card (same values as before,
+            # just a clearer layout: rank badge · phase · impact, then metrics).
+            cards = []
+            for s in sites:
+                mets = []
+                if s.get("backhaul_distance_m") is not None:
+                    mets.append(f'<span class="rec-metric"><b>{s["backhaul_distance_m"]:,.0f} m</b> to nearest tower</span>')
+                if s.get("slope_deg") is not None:
+                    mets.append(f'<span class="rec-metric"><b>{s["slope_deg"]:.1f}°</b> slope</span>')
+                if s["overloaded_relieved"]:
+                    mets.append(f'<span class="rec-metric"><b>{s["overloaded_relieved"]}</b> high-demand relieved</span>')
+                phase = s.get("phase", "?")
+                color = PHASE_COLOR.get(phase, "#7f8a99")
+                score_pct = max(0.0, min(1.0, s.get("score", 0.0))) * 100
+                cards.append(
+                    f'<div class="rec-card">'
+                    f'<div class="rec-card-head">'
+                    f'<span class="rec-rank">{s["rank"]}</span>'
+                    f'<span class="rec-phase" style="color:{color}">Phase {phase}</span>'
+                    f'<span class="rec-people">+{s["people_gained"]:,.0f}'
+                    f'<span class="rec-people-unit">people</span></span>'
+                    f'</div>'
+                    f'<div class="score-bar"><div class="score-marker" '
+                    f'style="left:{score_pct:.1f}%"></div></div>'
+                    f'<div class="rec-metrics">{"".join(mets)}</div>'
+                    f'<div class="rec-cost">est. <b>${s["est_capex_usd"]:,.0f}</b> capex · '
+                    f'<b>{s["people_per_1000usd"]:.1f}</b> people per $1,000'
+                    f'<span class="rec-coord"> · {s["lat"]:.4f}, {s["lon"]:.4f}</span></div>'
+                    f'</div>'
+                )
             rows_first = "".join(cards[:3])
             rows_rest = "".join(cards[3:])
             more_html = ""
             if len(cards) > 3:
                 more_html = (
-                    '<details style="margin-top:2px">'
-                    '<summary style="cursor:pointer;color:#22d3ee;font-size:.78rem;'
-                    'padding:6px 0 2px 0">'
+                    '<details class="rec-more"><summary>'
                     f'Show {len(cards) - 3} more sites</summary>'
-                    f'<div style="margin-top:4px">{rows_rest}</div></details>'
+                    f'<div>{rows_rest}</div></details>'
                 )
-            total_cost = sum(s["est_capex_usd"] for s in sites)
             st.markdown(
                 f'<div class="panel"><h4>{ICON["bulb"]}AI Insights — preliminary 5G site recommendations</h4>'
-                f'<div class="ai-insight">These <b>{len(sites)}</b> preliminary candidate sites '
-                f'(range {new_range} m, <b>{weight_profile}</b> profile, est. total capex '
-                f'<b>${total_cost:,.0f}</b>) could potentially reach an estimated '
-                f'<b>{covered_total:,.0f}</b> of the {gap["uncovered_pop"]:,.0f} people in estimated '
-                f'underserved areas (<b>{pct_gap:.0f}%</b> of the gap) — a preliminary ranking, not '
-                f'final tower locations (RF, cost, land &amp; regulatory checks still required).'
-                f'<div style="margin-top:8px">{rows_first}</div>{more_html}'
-                f'<div style="margin-top:8px;color:#5b6472;font-size:.68rem;font-style:italic">'
-                f'Weighted multi-criteria score: population reached (WorldPop) · backhaul proximity '
-                f'(cost proxy — distance to nearest OpenCelliD tower) · demand-pressure relief (proxy — '
-                f'nearby high-sample cells) · SRTM slope (buildability proxy). Weights are '
-                f'team-set/expert-judgement, not learned from data. Capex = $150k base + $62.5k/km '
-                f'backhaul fiber (industry benchmark, PatentPC 2026 — order-of-magnitude estimate, not a '
-                f'site-specific quote). '
-                f'Phase = rollout order by cost-efficiency (people reached per dollar), not selection '
-                f'rank. Slope is a buildability proxy, not a full RF propagation model.'
-                f'</div></div></div>',
+                f'<div class="rec-summary">'
+                f'<div class="rec-stat"><div class="rec-stat-value">{covered_total:,.0f}</div>'
+                f'<div class="rec-stat-label">people reached (est.)</div></div>'
+                f'<div class="rec-stat"><div class="rec-stat-value">{pct_gap:.0f}%</div>'
+                f'<div class="rec-stat-label">of the coverage gap</div></div>'
+                f'<div class="rec-stat"><div class="rec-stat-value">{cap_disp}</div>'
+                f'<div class="rec-stat-label">est. total capex</div></div>'
+                f'</div>'
+                f'<div class="rec-context"><b>{len(sites)}</b> candidate sites · '
+                f'{new_range} m range · <b>{weight_profile}</b> profile · '
+                f'of {gap["uncovered_pop"]:,.0f} people in estimated underserved areas</div>'
+                f'<div class="rec-list">{rows_first}</div>{more_html}'
+                f'<div class="rec-note">Preliminary ranking, not final tower locations (RF, cost, '
+                f'land &amp; regulatory checks still required). Weighted multi-criteria score: '
+                f'population reached (WorldPop) · backhaul proximity (cost proxy — distance to nearest '
+                f'OpenCelliD tower) · demand-pressure relief (proxy — nearby high-sample cells) · '
+                f'SRTM slope (buildability proxy). Weights are team-set/expert-judgement, not learned '
+                f'from data. Capex = $150k base + $62.5k/km backhaul fiber (industry benchmark, '
+                f'PatentPC 2026 — order-of-magnitude estimate, not a site-specific quote). Phase = '
+                f'rollout order by cost-efficiency (people reached per dollar), not selection rank. '
+                f'Slope is a buildability proxy, not a full RF propagation model.</div>'
+                f'</div>',
                 unsafe_allow_html=True,
             )
         else:
@@ -1047,8 +1120,3 @@ with panel_col:
         # api/main.py's /predict-rsrp endpoint still works if referenced in Q&A,
         # just not shown in the UI.
 
-st.caption(
-    "Function 1 (estimated underserved population/kampungs) ✓ · Function 2 (overloaded flags) ✓ "
-    "· Function 3 (greedy max-coverage new-5G-site recommendations) ✓ — all live. "
-    "MVP complete."
-)
