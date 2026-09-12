@@ -131,7 +131,8 @@ def _backhaul_distance_raster(shape, transform, lat0, tower_lon, tower_lat) -> n
 def recommend_sites(pop, cov_mask, transform, lat0, new_range_m, n_sites,
                     over_lon=None, over_lat=None,
                     tower_lon=None, tower_lat=None, slope=None,
-                    profile="Coverage-first", weights=None) -> list[dict]:
+                    profile="Coverage-first", weights=None,
+                    uv_lon=None, uv_lat=None, uv_names=None) -> list[dict]:
     """Return up to n_sites ranked candidate towers as dicts.
 
     over_lon/over_lat: OVERLOADED towers only (used for overload-relief score
@@ -165,6 +166,14 @@ def recommend_sites(pop, cov_mask, transform, lat0, new_range_m, n_sites,
     H, W = work.shape
     over_lon = np.asarray(over_lon) if over_lon is not None else np.array([])
     over_lat = np.asarray(over_lat) if over_lat is not None else np.array([])
+
+    # Underserved-village points (Roadmap/mentor #4): count how many currently
+    # underserved villages each recommended site would newly bring into range.
+    # Claimed once so counts across sites are complementary (no double-count).
+    uv_lon = np.asarray(uv_lon, dtype="float64") if uv_lon is not None else np.array([])
+    uv_lat = np.asarray(uv_lat, dtype="float64") if uv_lat is not None else np.array([])
+    uv_names = list(uv_names) if uv_names is not None else []
+    uv_claimed = np.zeros(uv_lon.shape[0], dtype=bool)
 
     # --- Static criteria (don't change as sites get picked) — computed once
     backhaul_dist_m = _backhaul_distance_raster(work.shape, transform, lat0, tower_lon, tower_lat)
@@ -224,9 +233,36 @@ def recommend_sites(pop, cov_mask, transform, lat0, new_range_m, n_sites,
             dy = (over_lat - lat) * M_PER_DEG_LAT
             relief = int(np.count_nonzero(dx * dx + dy * dy <= new_range_m ** 2))
 
+        # underserved villages this site would newly bring into range (#4)
+        villages_gained = 0
+        village_names: list[str] = []
+        if uv_lon.size:
+            dxv = (uv_lon - lon) * mlon
+            dyv = (uv_lat - lat) * M_PER_DEG_LAT
+            within = (dxv * dxv + dyv * dyv <= new_range_m ** 2) & ~uv_claimed
+            idx = np.nonzero(within)[0]
+            villages_gained = int(idx.size)
+            village_names = [uv_names[k] for k in idx
+                             if k < len(uv_names) and uv_names[k]]
+            uv_claimed[within] = True
+
+        # plain-language rationale (#4): population reach is the eligibility gate
+        # and the dominant driver, so lead with it; extras stay in the metrics.
+        why = (f"Selected as the location reaching the most still-underserved "
+               f"people in this area — about {gain:,.0f} people"
+               + (f" across {villages_gained} village"
+                  f"{'s' if villages_gained != 1 else ''}"
+                  + (f" ({', '.join(village_names[:3])}"
+                     f"{'…' if len(village_names) > 3 else ''})"
+                     if village_names else "")
+                  if villages_gained else "")
+               + ".")
+
         sites.append({
             "rank": rank, "lon": float(lon), "lat": float(lat),
             "people_gained": gain, "overloaded_relieved": relief,
+            "villages_gained": villages_gained, "village_names": village_names,
+            "why": why,
             "backhaul_distance_m": float(backhaul_dist_m[i, j]) if np.isfinite(backhaul_dist_m[i, j]) else None,
             "slope_deg": float(slope[i, j]) if slope is not None and np.isfinite(slope[i, j]) else None,
             "score": float(combined[i, j]),

@@ -1,0 +1,21 @@
+{
+  "target": "avg_d_kbps \u2014 next-quarter average mobile download (kbps)",
+  "test_tiles": 419,
+  "test_samples": 10894,
+  "lstm": {
+    "mae_kbps": 41847.0,
+    "rmse_kbps": 79011.0,
+    "r2": 0.549,
+    "source": "recorded training run (ml/Session2_LSTM_Training_Penang.ipynb)"
+  },
+  "naive_persistence": {
+    "mae_kbps": 40478,
+    "rmse_kbps": 88489,
+    "r2": 0.434
+  },
+  "improvement_vs_naive": {
+    "mae_pct": -3.4,
+    "rmse_pct": 10.7
+  },
+  "note": "Naive baseline = persistence (next quarter = last observed quarter). Same tile-level 70/15/15 split (SEED=42), LOOKBACK=4 quarters, on unseen test tiles. Positive improvement % = LSTM lower error than naive."
+}

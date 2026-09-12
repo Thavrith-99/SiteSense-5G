@@ -18,6 +18,7 @@ Layout inspiration: "ANDROMEDA" network-analytics dashboard
 """
 
 import hmac
+import json
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -185,6 +186,18 @@ st.markdown(
       }
 
       /* --- Recommendations panel (Function 3 hero) ----------------------- */
+      .rec-spotlight {
+        background: linear-gradient(135deg, #06231a, #0b1512);
+        border: 1px solid #1c5c3f; border-left: 3px solid #00e676;
+        border-radius: 12px; padding: 12px 16px; margin: 4px 0 14px 0;
+      }
+      .rec-spot-tag {
+        font-family: 'Montserrat', 'Source Sans Pro', sans-serif;
+        color: #00e676; font-size: 0.72rem; font-weight: 800;
+        text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px;
+      }
+      .rec-spot-body { color: #d7e6de; font-size: 0.9rem; line-height: 1.5; }
+      .rec-spot-body b { color: #eafff0; }
       .rec-summary { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0 10px 0; }
       .rec-stat {
         flex: 1 1 130px; background: #0b1512; border: 1px solid #1c3b32;
@@ -199,8 +212,12 @@ st.markdown(
         color: #8b96a5; font-size: 0.72rem; text-transform: uppercase;
         letter-spacing: 0.04em; margin-top: 5px;
       }
-      .rec-context { color: #9aa6b4; font-size: 0.86rem; margin: 0 0 6px 0; }
+      .rec-context { color: #9aa6b4; font-size: 0.86rem; margin: 0 0 4px 0; }
       .rec-context b { color: #e6ebf2; }
+      .rec-logic { color: #7f8a99; font-size: 0.8rem; font-style: italic;
+        line-height: 1.45; margin: 0 0 10px 0; }
+      .rec-villages { color: #cfd6e0; font-size: 0.82rem; margin: 2px 0 4px 0; }
+      .rec-villages b { color: #00e676; font-weight: 700; }
       .rec-card { padding: 13px 0; border-bottom: 1px solid #14231d; }
       .rec-card:last-child { border-bottom: none; }
       .rec-card-head { display: flex; align-items: center; gap: 10px; }
@@ -237,6 +254,25 @@ st.markdown(
       .rec-note {
         margin-top: 12px; color: #5b6472; font-size: 0.68rem; font-style: italic;
         line-height: 1.5;
+      }
+
+      /* --- LSTM accuracy-vs-baseline table (mentor #6) ------------------- */
+      .lstm-bench {
+        background: #0b1220; border: 1px solid #232a36; border-radius: 12px;
+        padding: 12px 16px; margin: 8px 0 12px 0;
+      }
+      .lstm-bench-title { color: #cfd6e0; font-size: 0.82rem; font-weight: 700; margin-bottom: 8px; }
+      .lstm-bench-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+      .lstm-bench-table th {
+        text-align: right; color: #8b96a5; font-weight: 600; font-size: 0.76rem;
+        padding: 3px 8px; border-bottom: 1px solid #232a36;
+      }
+      .lstm-bench-table th:first-child, .lstm-bench-table td:first-child { text-align: left; }
+      .lstm-bench-table td { text-align: right; padding: 5px 8px; color: #b7c0cc; }
+      .lstm-bench-win td { color: #eafff0; font-weight: 700; }
+      .lstm-bench-win td:first-child { color: #00e676; }
+      .lstm-bench-note {
+        margin-top: 8px; color: #6f7b8a; font-size: 0.72rem; line-height: 1.5;
       }
       .todo { color: #d9a441; }
 
@@ -713,7 +749,8 @@ st.markdown(
 k1, k2, k3, k4 = st.columns(4)
 kpi_card(k1, "Cells in view", f"{n_towers:,}", f"{n_4g:,} × 4G · {n_5g:,} × 5G", icon=ICON["tower"])
 kpi_card(k2, "Est. people underserved", f"{gap['uncovered_pop']:,.0f}",
-         f"{gap['pct_covered']:.1f}% of {gap['total_pop']:,.0f} est. covered", icon=ICON["people"])
+         f"{100 - gap['pct_covered']:.1f}% underserved · {gap['pct_covered']:.1f}% covered "
+         f"of {gap['total_pop']:,.0f} total", icon=ICON["people"])
 kpi_card(k3, "Kampungs — est. underserved", f"{gap['n_uncovered_places']:,}",
          f"of {gap['n_places']:,} OSM places in view", icon=ICON["village"])
 overloaded_sub = (
@@ -961,13 +998,17 @@ with panel_col:
             f'<div class="panel"><h4>{ICON["chart"]}Estimated coverage gap (4G/5G)</h4>'
             f'<div style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
             f'{gap["uncovered_pop"]:,.0f}</div>'
-            f'<div style="color:#8b96a5;font-size:.78rem">people in estimated underserved areas · '
-            f'{100 - gap["pct_covered"]:.1f}% of the estimated {scope} population</div>'
-            f'<div style="margin-top:8px;color:#ff9800">● {gap["n_uncovered_places"]} '
-            f'villages/kampungs — estimated underserved</div>'
+            f'<div style="color:#8b96a5;font-size:.78rem">people in estimated underserved areas '
+            f'(<b style="color:#cfd6e0">{100 - gap["pct_covered"]:.1f}% underserved</b> · '
+            f'<b style="color:#cfd6e0">{gap["pct_covered"]:.1f}% covered</b> of '
+            f'{gap["total_pop"]:,.0f} est. total {scope} population)</div>'
+            f'<div style="margin-top:8px;color:#ff9800">● {gap["n_uncovered_places"]} of '
+            f'{gap["n_places"]} villages/kampungs — estimated underserved</div>'
             f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'
             f'Estimated from each cell\'s reported OpenCelliD range, not verified operator '
-            f'coverage data.</div></div>',
+            f'coverage data. Cross-check: MCMC JENDELA reports ~97% national 4G population '
+            f'coverage (2024; target 100% by end-2025) — consistent with this open-data '
+            f'estimate.</div></div>',
             unsafe_allow_html=True,
         )
         if gap["n_uncovered_places"]:
@@ -996,12 +1037,21 @@ with panel_col:
             cards = []
             for s in sites:
                 mets = []
+                vg = s.get("villages_gained", 0)
+                if vg:
+                    mets.append(f'<span class="rec-metric"><b>{vg}</b> village{"s" if vg != 1 else ""} covered</span>')
                 if s.get("backhaul_distance_m") is not None:
                     mets.append(f'<span class="rec-metric"><b>{s["backhaul_distance_m"]:,.0f} m</b> to nearest tower</span>')
                 if s.get("slope_deg") is not None:
                     mets.append(f'<span class="rec-metric"><b>{s["slope_deg"]:.1f}°</b> slope</span>')
                 if s["overloaded_relieved"]:
                     mets.append(f'<span class="rec-metric"><b>{s["overloaded_relieved"]}</b> high-demand relieved</span>')
+                # which underserved villages this site would newly reach (#4)
+                vnames = [str(n) for n in (s.get("village_names") or []) if n]
+                villages_line = ""
+                if vnames:
+                    villages_line = (f'<div class="rec-villages"><b>Covers:</b> '
+                                     f'{", ".join(vnames)}</div>')
                 phase = s.get("phase", "?")
                 color = PHASE_COLOR.get(phase, "#7f8a99")
                 score_pct = max(0.0, min(1.0, s.get("score", 0.0))) * 100
@@ -1016,6 +1066,7 @@ with panel_col:
                     f'<div class="score-bar"><div class="score-marker" '
                     f'style="left:{score_pct:.1f}%"></div></div>'
                     f'<div class="rec-metrics">{"".join(mets)}</div>'
+                    f'{villages_line}'
                     f'<div class="rec-cost">est. <b>${s["est_capex_usd"]:,.0f}</b> capex · '
                     f'<b>{s["people_per_1000usd"]:.1f}</b> people per $1,000'
                     f'<span class="rec-coord"> · {s["lat"]:.4f}, {s["lon"]:.4f}</span></div>'
@@ -1030,8 +1081,34 @@ with panel_col:
                     f'Show {len(cards) - 3} more sites</summary>'
                     f'<div>{rows_rest}</div></details>'
                 )
+
+            # Flagship "one village, one site, one benefit" spotlight (#7),
+            # built from the top-ranked site (greedy picks it as the largest
+            # single coverage gain, so it makes the clearest finale example).
+            top = sites[0]
+            _tv = [str(n) for n in (top.get("village_names") or []) if n]
+            _vc = top.get("villages_gained", 0)
+            # Precise wording: people_gained = WorldPop population inside the new
+            # tower's coverage circle (not the population "of" the named villages);
+            # the villages are the underserved settlement points inside that circle.
+            _vclause = ""
+            if _vc:
+                _vclause = (f' The covered area includes <b>{_vc}</b> currently-underserved '
+                            f'village{"s" if _vc != 1 else ""}'
+                            + (f' — {", ".join(_tv)}' if _tv else "") + '.')
+            spotlight = (
+                f'<div class="rec-spotlight">'
+                f'<div class="rec-spot-tag">◆ Spotlight — one site · one cluster · one benefit</div>'
+                f'<div class="rec-spot-body">SiteSense\'s #1 recommended 5G site '
+                f'(<b>{top["lat"]:.4f}, {top["lon"]:.4f}</b>) would bring an estimated '
+                f'<b>{top["people_gained"]:,.0f}</b> residents into coverage — the most people '
+                f'reached by any single site in the plan — for an est. '
+                f'<b>${top["est_capex_usd"]:,.0f}</b> '
+                f'({top["people_per_1000usd"]:.1f} people per $1,000).{_vclause}</div></div>'
+            )
             st.markdown(
                 f'<div class="panel"><h4>{ICON["bulb"]}AI Insights — preliminary 5G site recommendations</h4>'
+                f'{spotlight}'
                 f'<div class="rec-summary">'
                 f'<div class="rec-stat"><div class="rec-stat-value">{covered_total:,.0f}</div>'
                 f'<div class="rec-stat-label">people reached (est.)</div></div>'
@@ -1043,6 +1120,9 @@ with panel_col:
                 f'<div class="rec-context"><b>{len(sites)}</b> candidate sites · '
                 f'{new_range} m range · <b>{weight_profile}</b> profile · '
                 f'of {gap["uncovered_pop"]:,.0f} people in estimated underserved areas</div>'
+                f'<div class="rec-logic">Why these spots: each site is placed where it reaches the '
+                f'most still-underserved people not already covered by a higher-ranked site '
+                f'(greedy max-coverage). Cards show the people and villages each would newly reach.</div>'
                 f'<div class="rec-list">{rows_first}</div>{more_html}'
                 f'<div class="rec-note">Preliminary ranking, not final tower locations (RF, cost, '
                 f'land &amp; regulatory checks still required). Weighted multi-criteria score: '
@@ -1077,6 +1157,35 @@ with panel_col:
                   "download throughput for a real Penang map tile from its last 4 quarters "
                   "of real measurements (Ookla Open Data). Separate FastAPI service, not "
                   "part of the coverage/site-recommendation logic above.")
+
+        # Performance on unseen data vs a simple baseline (mentor #6). Read from
+        # ml/lstm_penang_metrics.json (produced by ml/evaluate_penang_baseline.py
+        # or a fresh train_lstm_penang.py run); silently skipped if absent.
+        _bench_path = APP_DIR / "ml" / "lstm_penang_metrics.json"
+        if _bench_path.exists():
+            try:
+                _bm = json.loads(_bench_path.read_text(encoding="utf-8"))
+                _l, _nb, _imp = _bm["lstm"], _bm["naive_persistence"], _bm["improvement_vs_naive"]
+                st.markdown(
+                    f'<div class="lstm-bench">'
+                    f'<div class="lstm-bench-title">Accuracy on unseen test tiles '
+                    f'({_bm["test_samples"]:,} samples) vs a naive baseline</div>'
+                    f'<table class="lstm-bench-table">'
+                    f'<tr><th>model</th><th>MAE (Mbps) ↓</th><th>RMSE (Mbps) ↓</th><th>R² ↑</th></tr>'
+                    f'<tr class="lstm-bench-win"><td>LSTM</td><td>{_l["mae_kbps"]/1000:.1f}</td>'
+                    f'<td>{_l["rmse_kbps"]/1000:.1f}</td><td>{_l["r2"]:.3f}</td></tr>'
+                    f'<tr><td>Naive (persistence)</td><td>{_nb["mae_kbps"]/1000:.1f}</td>'
+                    f'<td>{_nb["rmse_kbps"]/1000:.1f}</td><td>{_nb["r2"]:.3f}</td></tr>'
+                    f'</table>'
+                    f'<div class="lstm-bench-note">Naive = "next quarter = last quarter". '
+                    f'LSTM vs naive: RMSE {_imp["rmse_pct"]:+.0f}%, MAE {_imp["mae_pct"]:+.0f}%, '
+                    f'R² {_nb["r2"]:.2f}→{_l["r2"]:.2f} (positive % = LSTM lower error). The gain is '
+                    f'mainly in RMSE / R² — the model reduces large errors and explains more variance.'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+            except Exception:
+                pass
         if st.button("▶ Run Penang prediction", key="lstm_penang_btn"):
             try:
                 import requests

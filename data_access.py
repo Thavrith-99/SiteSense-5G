@@ -10,8 +10,10 @@ Population always stays file-based (WorldPop GeoTIFF) — see
 db/schema.sql's header comment for why.
 """
 import json
+from functools import lru_cache
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 import coverage as cov
@@ -116,9 +118,11 @@ def _load_places_db(scope: str):
             "place": df["place"].fillna("").tolist()}
 
 
+@lru_cache(maxsize=8)
 def load_towers(scope: str) -> pd.DataFrame:
     """OpenCelliD Malaysia cells, clipped to the chosen scope polygon.
-    Tries PostGIS first; falls back to the CSV + shapely clip."""
+    Tries PostGIS first; falls back to the CSV + shapely clip.
+    Cached: callers only read / take filtered copies, never mutate the result."""
     db_df = _load_towers_db(scope)
     if db_df is not None:
         return db_df
@@ -139,10 +143,12 @@ def load_towers(scope: str) -> pd.DataFrame:
     return penang
 
 
+@lru_cache(maxsize=8)
 def load_population(scope: str):
     return cov.load_population(SCOPES[scope]["pop"])
 
 
+@lru_cache(maxsize=8)
 def load_places(scope: str):
     """Tries PostGIS first; falls back to the scope's villages GeoJSON."""
     db_places = _load_places_db(scope)
@@ -151,6 +157,7 @@ def load_places(scope: str):
     return cov.load_places(SCOPES[scope]["places"])
 
 
+@lru_cache(maxsize=8)
 def load_slope(scope: str):
     """Real SRTM-derived slope (degrees), Roadmap #6 — see
     data_prep/fetch_srtm_slope.py. Returns (None, None) if not yet fetched,
@@ -161,8 +168,13 @@ def load_slope(scope: str):
     return cov.load_population(path)  # generic single-band float raster loader
 
 
+@lru_cache(maxsize=16)
 def compute_gap(scope: str, picked_key: tuple, max_range: int):
-    """Function 1 — coverage gap for the currently-filtered towers."""
+    """Function 1 — coverage gap for the currently-filtered towers.
+    Cached (the ~9s hot path): the dashboard's standalone call and the internal
+    call inside compute_sites share one result; changing filters that don't
+    affect the gap (profile, threshold, new-tower range, #sites) then reruns
+    only the fast recommend step."""
     df = load_towers(scope)
     sub = df[df["radio"].isin(picked_key) & (df["range"] <= max_range)]
     pop, transform = load_population(scope)
@@ -187,9 +199,19 @@ def compute_sites(scope: str, picked_key: tuple, max_range: int, load_p: int,
     thr = sub["samples"].quantile(load_p / 100.0)
     ov = sub[sub["samples"] >= thr]
     slope, _ = load_slope(scope)
+
+    # Underserved villages (outside every tower's estimated footprint) so each
+    # recommended site can report how many it would newly bring into range (#4).
+    places = load_places(scope)
+    uncov = ~g["villages_covered_mask"]
+    uv_lon = np.asarray(places["lon"])[uncov]
+    uv_lat = np.asarray(places["lat"])[uncov]
+    uv_names = np.asarray(places["name"])[uncov]
+
     return rec.recommend_sites(
         pop, g["coverage_mask"], transform, SCOPES[scope]["center"][0],
         new_range, n_sites, ov["lon"].values, ov["lat"].values,
         tower_lon=sub["lon"].values, tower_lat=sub["lat"].values,
         slope=slope, profile=profile,
+        uv_lon=uv_lon, uv_lat=uv_lat, uv_names=uv_names,
     )

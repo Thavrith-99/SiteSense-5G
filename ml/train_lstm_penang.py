@@ -26,6 +26,7 @@ Outputs:
     ml/lstm_penang_model.keras
     ml/penang_training_history.png
 """
+import json
 import random
 from pathlib import Path
 
@@ -107,7 +108,8 @@ def make_sequences(data, tile_ids, features, lookback=LOOKBACK):
         for i in range(lookback, len(g)):
             X.append(xv[i - lookback:i]); y.append(yv[i])
             meta.append({"quadkey": qk, "q_index": g.loc[i, "q_index"],
-                        "Actual": g.loc[i, TARGET]})
+                        "Actual": g.loc[i, TARGET],
+                        "Naive": g.loc[i - 1, TARGET]})  # persistence baseline
     return np.asarray(X, np.float32), np.asarray(y, np.float32), pd.DataFrame(meta)
 
 
@@ -165,6 +167,31 @@ def main():
     print(f"Test MAE:  {mae:,.0f} kbps")
     print(f"Test RMSE: {rmse:,.0f} kbps")
     print(f"Test R^2:  {r2:.3f}")
+
+    # --- Naive persistence baseline (mentor #6): next quarter = last quarter ---
+    # The yardstick the model must beat. Same unseen test samples.
+    naive = m_test["Naive"].to_numpy(float)
+    n_mae = mean_absolute_error(actual, naive)
+    n_rmse = float(np.sqrt(mean_squared_error(actual, naive)))
+    n_r2 = r2_score(actual, naive)
+    print(f"Naive MAE: {n_mae:,.0f} kbps   RMSE: {n_rmse:,.0f}   R^2: {n_r2:.3f}")
+    print(f"LSTM vs naive — MAE {(n_mae - mae) / n_mae * 100:+.1f}%   "
+          f"RMSE {(n_rmse - rmse) / n_rmse * 100:+.1f}%")
+
+    metrics = {
+        "target": "avg_d_kbps — next-quarter average mobile download (kbps)",
+        "test_samples": int(actual.size),
+        "lstm": {"mae_kbps": round(float(mae)), "rmse_kbps": round(rmse),
+                 "r2": round(float(r2), 3), "source": "this training run"},
+        "naive_persistence": {"mae_kbps": round(float(n_mae)), "rmse_kbps": round(n_rmse),
+                              "r2": round(float(n_r2), 3)},
+        "improvement_vs_naive": {"mae_pct": round((n_mae - mae) / n_mae * 100, 1),
+                                 "rmse_pct": round((n_rmse - rmse) / n_rmse * 100, 1)},
+        "note": ("Naive baseline = persistence (next quarter = last observed quarter). "
+                 "Positive improvement % = LSTM lower error than naive."),
+    }
+    (Path(__file__).resolve().parent / "lstm_penang_metrics.json").write_text(
+        json.dumps(metrics, indent=2), encoding="utf-8")
 
     model.save(MODEL_OUT)
     print(f"Saved {MODEL_OUT}")
