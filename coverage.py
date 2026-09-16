@@ -119,3 +119,58 @@ def coverage_gap(pop, transform, places, tlon, tlat, trange, lat0: float) -> dic
         "n_places": n_places,
         "n_uncovered_places": n_uncov_places,
     }
+
+
+def underserved_grid(pop, transform, coverage_mask):
+    """Uncovered-population raster for a filled image overlay.
+
+    Returns (grid, bounds): `grid` is people-per-pixel where the pixel lies
+    OUTSIDE all coverage (0 elsewhere); `bounds` is
+    [[lat_min, lon_min], [lat_max, lon_max]] for folium.ImageOverlay. Same data
+    as the KPI, rendered as filled regions instead of a number.
+    """
+    valid = np.isfinite(pop)
+    grid = np.where(valid & ~coverage_mask, np.nan_to_num(pop), 0.0)
+    H, W = grid.shape
+    lon0 = transform.c
+    lat0 = transform.f
+    lon1 = transform.c + W * transform.a
+    lat1 = transform.f + H * transform.e          # transform.e is negative
+    bounds = [[float(min(lat0, lat1)), float(min(lon0, lon1))],
+              [float(max(lat0, lat1)), float(max(lon0, lon1))]]
+    return grid, bounds
+
+
+def underserved_heat_points(pop, transform, coverage_mask,
+                            coarsen: int = 3, min_people: float = 1.0):
+    """Weighted points for a population-gap heatmap.
+
+    Returns a list of [lat, lon, weight] for the UNCOVERED population only
+    (pixels outside every tower circle), summed into `coarsen`×`coarsen` blocks
+    to keep the point count light for the browser. `weight` = estimated people
+    underserved in that block; blocks below `min_people` are dropped. The block
+    weights sum to the same uncovered_pop total the KPI shows — it is the same
+    data, just rendered as intensity instead of a single number.
+    """
+    valid = np.isfinite(pop)
+    # people in each pixel that lies OUTSIDE all coverage (0 elsewhere)
+    unpop = np.where(valid & ~coverage_mask, np.nan_to_num(pop), 0.0)
+    H, W = unpop.shape
+    c = max(1, int(coarsen))
+    Hc, Wc = H // c, W // c
+    if Hc == 0 or Wc == 0:
+        block = unpop
+        Hc, Wc, c = H, W, 1
+    else:
+        block = unpop[:Hc * c, :Wc * c].reshape(Hc, c, Wc, c).sum(axis=(1, 3))
+    rows, cols = np.where(block >= min_people)
+    if rows.size == 0:
+        return []
+    weights = block[rows, cols]
+    # centre of each block, in original raster pixel coords
+    px_c = (cols + 0.5) * c
+    px_r = (rows + 0.5) * c
+    lon = transform.a * px_c + transform.b * px_r + transform.c
+    lat = transform.d * px_c + transform.e * px_r + transform.f
+    return [[float(la), float(lo), float(wt)]
+            for la, lo, wt in zip(lat, lon, weights)]

@@ -117,6 +117,10 @@ load_population = st.cache_data(show_spinner=False)(da.load_population)
 load_places = st.cache_data(show_spinner=False)(da.load_places)
 compute_gap = st.cache_data(show_spinner="Computing coverage gap…")(da.compute_gap)
 compute_sites = st.cache_data(show_spinner="Scoring candidate sites…")(da.compute_sites)
+# Optional population-gap heatmap — resolved defensively so a missing/renamed
+# data-layer function can never crash the dashboard at import time.
+_uo_fn = getattr(da, "underserved_heat", None)
+underserved_heat = st.cache_data(show_spinner=False)(_uo_fn) if _uo_fn else None
 
 
 # --------------------------------------------------------------------------
@@ -667,8 +671,12 @@ with st.sidebar:
     picked = [radio_labels[l] for l in picked_labels] or radios_present
 
     rng_max = int(df["range"].max())
+    # step=1 (not 100) so the slider can land on the exact data max (rng_max,
+    # e.g. 18,819). With step=100 the far-right snapped to 18,800, silently
+    # dropping the longest-range cell and changing the headline the moment the
+    # slider was touched. Streamlit only reruns on release, so step=1 is fine.
     max_range = st.slider(
-        "Max coverage range (m)", 100, rng_max, rng_max, step=100,
+        "Max coverage range (m)", 100, rng_max, rng_max, step=1,
         help="Reported cell range from OpenCelliD (coverage footprint proxy). "
              "Defaults to include all towers; lower it to exclude cells with "
              "implausibly large reported range.",
@@ -687,6 +695,11 @@ with st.sidebar:
                                 help="Marks OSM places outside every tower's estimated coverage "
                                      "footprint (OpenCelliD reported range) — not verified operator "
                                      "coverage data.")
+        show_heat = st.checkbox("Show estimated underserved population heatmap", value=False,
+                                help="Shades where the estimated underserved PEOPLE are — the "
+                                     "WorldPop population that falls outside coverage. A density "
+                                     "view of the same figure in the 'people underserved' KPI, "
+                                     "distinct from the village markers.")
 
         st.markdown("**Preliminary new-site recommendations**")
         weight_profile = st.selectbox(
@@ -863,7 +876,40 @@ with map_col:
         "<script>(function mv(){var tl=document.querySelector('.leaflet-top.leaflet-left');"
         "var z=document.querySelector('.leaflet-control-zoom');"
         "if(tl&&z){tl.insertBefore(z,tl.firstChild);}else{setTimeout(mv,100);}})();</script>"))
-    m.get_root().html.add_child(_folium.Element(LEGEND_HTML))
+    # Population-gap heatmap (opt-in). A smooth density glow of the underserved
+    # population, drawn UNDERNEATH the markers; a matching gradient row is appended
+    # to the legend. The whole block is wrapped so ANY failure (data, encoding, a
+    # stale module) silently skips the layer — it can never crash the dashboard.
+    _legend = LEGEND_HTML
+    if show_heat and underserved_heat is not None:
+        try:
+            # coarsen=2 -> denser points so the glow stays continuous when zoomed in
+            _heat_pts = underserved_heat(scope, tuple(sorted(picked)), int(max_range), 2)
+            if _heat_pts:
+                from folium.plugins import HeatMap
+                # Normalise weights to 0–1 by the 95th percentile so the ramp shows
+                # real density variation instead of saturating into flat blobs.
+                _ws = np.array([p[2] for p in _heat_pts], dtype=float)
+                _scale = float(np.percentile(_ws, 95)) or float(_ws.max()) or 1.0
+                _norm = [[p[0], p[1], min(1.0, p[2] / _scale)] for p in _heat_pts]
+                # Bold, saturated YlOrRd ramp for the LIGHT basemap. Bigger radius +
+                # lower blur + higher min-opacity keep it vivid and continuous even
+                # when zoomed in (avoids the faint 'polka-dot' scatter).
+                HeatMap(
+                    _norm, name="Est. underserved population",
+                    radius=26, blur=14, min_opacity=0.5, max_zoom=18,
+                    gradient={0.15: "#ffeda0", 0.35: "#feb24c", 0.55: "#fd8d3c",
+                              0.72: "#fc4e2a", 0.86: "#e31a1c", 1.0: "#b10026"},
+                ).add_to(m)
+            _heat_row = ('<div><span style="display:inline-block;width:12px;height:10px;'
+                         'border-radius:3px;background:linear-gradient(90deg,#ffeda0,#feb24c,'
+                         '#fd8d3c,#fc4e2a,#e31a1c,#b10026);margin-right:8px;"></span>'
+                         'Est. Underserved Population</div>')
+            _parts = _legend.rsplit("</div>", 1)
+            _legend = _parts[0] + _heat_row + "</div>" + _parts[1]
+        except Exception:
+            _legend = LEGEND_HTML  # heatmap failed — fall back to the plain legend
+    m.get_root().html.add_child(_folium.Element(_legend))
     for radio in ["GSM", "UMTS", "LTE", "NR"]:  # draw important ones last (on top)
         sub = fdf[fdf["radio"] == radio]
         if sub.empty:

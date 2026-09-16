@@ -186,6 +186,18 @@ def compute_gap(scope: str, picked_key: tuple, max_range: int):
     )
 
 
+@lru_cache(maxsize=16)
+def underserved_heat(scope: str, picked_key: tuple, max_range: int,
+                     coarsen: int = 3):
+    """Weighted [lat, lon, people] points for the population-gap heatmap.
+    Reuses the cached compute_gap coverage mask, so it's cheap once the gap
+    has been computed for the current filters."""
+    pop, transform = load_population(scope)
+    g = compute_gap(scope, picked_key, max_range)
+    return cov.underserved_heat_points(pop, transform, g["coverage_mask"],
+                                       coarsen=coarsen)
+
+
 def compute_sites(scope: str, picked_key: tuple, max_range: int, load_p: int,
                   new_range: int, n_sites: int, profile: str = "Coverage-first"):
     """Function 3 — weighted multi-criteria (MCDA) new-5G-tower

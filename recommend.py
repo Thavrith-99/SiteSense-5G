@@ -273,6 +273,16 @@ def recommend_sites(pop, cov_mask, transform, lat0, new_range_m, n_sites,
         block[ell] = 0.0
         work[r0:r1, c0:c1] = block
 
+    # Present the sites in descending order of people reached and renumber the
+    # ranks, so the ranking is always monotonic. The greedy's fast SQUARE search
+    # can, when two spots are near-tied, pick them in an order that doesn't match
+    # their exact CIRCULAR population (e.g. site 4 < site 5 at wide max-range).
+    # Selected sites are complementary (non-overlapping coverage), so re-ordering
+    # by people_gained changes no total — only the display order and rank badges.
+    sites.sort(key=lambda s: s["people_gained"], reverse=True)
+    for new_rank, s in enumerate(sites, start=1):
+        s["rank"] = new_rank
+
     cum = 0.0
     for s in sites:
         cum += s["people_gained"]
