@@ -1,0 +1,20 @@
+{
+  "target": "avg_u_kbps \u2014 next-quarter average mobile upload (kbps)",
+  "test_samples": 10894,
+  "lstm": {
+    "mae_kbps": 6480,
+    "rmse_kbps": 10686,
+    "r2": 0.562,
+    "source": "this training run"
+  },
+  "naive_persistence": {
+    "mae_kbps": 16930,
+    "rmse_kbps": 23393,
+    "r2": -1.1
+  },
+  "improvement_vs_naive": {
+    "mae_pct": 61.7,
+    "rmse_pct": 54.3
+  },
+  "note": "Naive baseline = persistence (next quarter = last observed quarter). Positive improvement % = LSTM lower error than naive."
+}

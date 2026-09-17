@@ -256,8 +256,8 @@ st.markdown(
       }
       .rec-more > summary:hover { color: #4fe0f5; }
       .rec-note {
-        margin-top: 12px; color: #5b6472; font-size: 0.68rem; font-style: italic;
-        line-height: 1.5;
+        margin-top: 12px; color: #5b6472; font-size: 0.85rem; font-style: italic;
+        line-height: 1.55;
       }
 
       /* --- LSTM accuracy-vs-baseline table (mentor #6) ------------------- */
@@ -1174,11 +1174,7 @@ with panel_col:
                 f'land &amp; regulatory checks still required). Weighted multi-criteria score: '
                 f'population reached (WorldPop) · backhaul proximity (cost proxy — distance to nearest '
                 f'OpenCelliD tower) · demand-pressure relief (proxy — nearby high-sample cells) · '
-                f'SRTM slope (buildability proxy). Weights are team-set/expert-judgement, not learned '
-                f'from data. Capex = $150k base + $62.5k/km backhaul fiber (industry benchmark, '
-                f'PatentPC 2026 — order-of-magnitude estimate, not a site-specific quote). Phase = '
-                f'rollout order by cost-efficiency (people reached per dollar), not selection rank. '
-                f'Slope is a buildability proxy, not a full RF propagation model.</div>'
+                f'SRTM slope (buildability proxy).</div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -1197,37 +1193,55 @@ with panel_col:
         # real Penang tile history (Ookla Open Data, quarterly) — no
         # KL-transfer-learning caveat needed, this model has actually seen
         # Penang. See ml/train_lstm_penang.py for the KL-vs-Penang mapping.
-        st.markdown(f'<div class="panel"><h4>{ICON["trend"]}LSTM Network-Trend Demo (Penang, real data)</h4>',
+        st.markdown(f'<div class="panel"><h4>{ICON["trend"]}Mobile Broadband Speed Forecast — Penang (per tile, LSTM)</h4>',
                    unsafe_allow_html=True)
-        st.caption("Deployable ML pipeline demo — predicts next quarter's average mobile "
-                  "download throughput for a real Penang map tile from its last 4 quarters "
-                  "of real measurements (Ookla Open Data). Separate FastAPI service, not "
-                  "part of the coverage/site-recommendation logic above.")
+        st.caption("ML predicts next quarter's average mobile download throughput for a real "
+                  "Penang map tile from its last 4 quarters of real measurements (Ookla Open Data).")
 
         # Performance on unseen data vs a simple baseline (mentor #6). Read from
         # ml/lstm_penang_metrics.json (produced by ml/evaluate_penang_baseline.py
         # or a fresh train_lstm_penang.py run); silently skipped if absent.
         _bench_path = APP_DIR / "ml" / "lstm_penang_metrics.json"
+        _up_bench_path = APP_DIR / "ml" / "lstm_penang_upload_metrics.json"
         if _bench_path.exists():
             try:
                 _bm = json.loads(_bench_path.read_text(encoding="utf-8"))
                 _l, _nb, _imp = _bm["lstm"], _bm["naive_persistence"], _bm["improvement_vs_naive"]
+                _um = None  # optional upload benchmark — shown only if present
+                if _up_bench_path.exists():
+                    try:
+                        _um = json.loads(_up_bench_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        _um = None
+
+                def _row(label, m, win=False):
+                    cls = ' class="lstm-bench-win"' if win else ''
+                    return (f'<tr{cls}><td>{label}</td><td>{m["mae_kbps"]/1000:.1f}</td>'
+                            f'<td>{m["rmse_kbps"]/1000:.1f}</td><td>{m["r2"]:.3f}</td></tr>')
+
+                _rows = _row("LSTM · download", _l, win=True) + _row("Naive · download", _nb)
+                if _um:
+                    _rows += (_row("LSTM · upload", _um["lstm"], win=True)
+                              + _row("Naive · upload", _um["naive_persistence"]))
+                if _um:
+                    _uimp = _um["improvement_vs_naive"]
+                    _note = ('Naive = "next quarter = last quarter". Download — LSTM vs naive '
+                             f'RMSE {_imp["rmse_pct"]:+.0f}% / MAE {_imp["mae_pct"]:+.0f}%. '
+                             f'Upload — RMSE {_uimp["rmse_pct"]:+.0f}% / MAE {_uimp["mae_pct"]:+.0f}% '
+                             '(positive % = LSTM lower error).')
+                else:
+                    _note = ('Naive = "next quarter = last quarter". LSTM vs naive: '
+                             f'RMSE {_imp["rmse_pct"]:+.0f}%, MAE {_imp["mae_pct"]:+.0f}%, '
+                             f'R² {_nb["r2"]:.2f}→{_l["r2"]:.2f} (positive % = LSTM lower error).')
                 st.markdown(
                     f'<div class="lstm-bench">'
                     f'<div class="lstm-bench-title">Accuracy on unseen test tiles '
                     f'({_bm["test_samples"]:,} samples) vs a naive baseline</div>'
                     f'<table class="lstm-bench-table">'
                     f'<tr><th>model</th><th>MAE (Mbps) ↓</th><th>RMSE (Mbps) ↓</th><th>R² ↑</th></tr>'
-                    f'<tr class="lstm-bench-win"><td>LSTM</td><td>{_l["mae_kbps"]/1000:.1f}</td>'
-                    f'<td>{_l["rmse_kbps"]/1000:.1f}</td><td>{_l["r2"]:.3f}</td></tr>'
-                    f'<tr><td>Naive (persistence)</td><td>{_nb["mae_kbps"]/1000:.1f}</td>'
-                    f'<td>{_nb["rmse_kbps"]/1000:.1f}</td><td>{_nb["r2"]:.3f}</td></tr>'
+                    f'{_rows}'
                     f'</table>'
-                    f'<div class="lstm-bench-note">Naive = "next quarter = last quarter". '
-                    f'LSTM vs naive: RMSE {_imp["rmse_pct"]:+.0f}%, MAE {_imp["mae_pct"]:+.0f}%, '
-                    f'R² {_nb["r2"]:.2f}→{_l["r2"]:.2f} (positive % = LSTM lower error). The gain is '
-                    f'mainly in RMSE / R² — the model reduces large errors and explains more variance.'
-                    f'</div></div>',
+                    f'<div class="lstm-bench-note">{_note}</div></div>',
                     unsafe_allow_html=True,
                 )
             except Exception:
@@ -1245,15 +1259,25 @@ with panel_col:
                                          json={"observations": sample["observations"]}, timeout=60)
                     resp.raise_for_status()
                     r = resp.json()
-                actual = sample.get("actual_next_avg_d_kbps")
-                actual_line = (f'<div style="color:#8b96a5;font-size:.78rem;margin-top:2px">'
-                              f'actual next quarter: {actual/1000:.1f} Mbps</div>' if actual else "")
+                _ad = sample.get("actual_next_avg_d_kbps")
+                _au = sample.get("actual_next_avg_u_kbps")
+                _dl_actual = (f' <span style="color:#8b96a5">(actual {_ad/1000:.1f})</span>' if _ad else "")
+                _dl_line = (f'<div style="margin-top:2px">'
+                            f'<span style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
+                            f'{r["predicted_mbps"]} Mbps</span>&nbsp;'
+                            f'<span style="color:#00e676">● predicted download</span>{_dl_actual}</div>')
+                # upload line — only if the API returned an upload prediction
+                _ul_line = ""
+                _up_mbps = r.get("predicted_upload_mbps")
+                if _up_mbps is not None:
+                    _ul_actual = (f' <span style="color:#8b96a5">(actual {_au/1000:.1f})</span>' if _au else "")
+                    _ul_line = (f'<div style="margin-top:2px">'
+                                f'<span style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
+                                f'{_up_mbps} Mbps</span>&nbsp;'
+                                f'<span style="color:#29b6f6">● predicted upload</span>{_ul_actual}</div>')
                 st.markdown(
                     f'<div style="margin-top:4px">'
-                    f'<span style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
-                    f'{r["predicted_mbps"]} Mbps</span>&nbsp;&nbsp;'
-                    f'<span style="color:#00e676">● predicted download</span>'
-                    f'{actual_line}'
+                    f'{_dl_line}{_ul_line}'
                     f'<div style="color:#8b96a5;font-size:.78rem;margin-top:4px">'
                     f'tile {sample["quadkey"]} · {r["response_time_ms"]:.0f} ms · {r["model_version"]}</div>'
                     f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'

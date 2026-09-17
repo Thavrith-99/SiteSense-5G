@@ -306,13 +306,17 @@ LOOKBACK_PENANG = 4  # quarters
 TARGET_PENANG = "avg_d_kbps"
 PENANG_MODEL_FILE = Path(__file__).resolve().parent.parent / "ml" / "lstm_penang_model.keras"
 PENANG_MODEL_VERSION = "LSTM-PENANG-NETWORK-1.0"
+UPLOAD_TARGET = "avg_u_kbps"
+PENANG_UPLOAD_MODEL_FILE = Path(__file__).resolve().parent.parent / "ml" / "lstm_penang_upload_model.keras"
 
 
 class _PenangLSTMService:
     def __init__(self):
         self.model = None
+        self.upload_model = None            # optional — download works without it
         self.feature_scaler = None
         self.target_scaler = None
+        self.upload_target_scaler = None
         self.features = None
         self.df = None
         self._error = None
@@ -337,10 +341,19 @@ class _PenangLSTMService:
             self.features = features
             self.df = df
             self.model = tf.keras.models.load_model(PENANG_MODEL_FILE)
+
+            # Optional UPLOAD model — load it if present. A failure here must NEVER
+            # break the primary download prediction, so it is caught separately.
+            try:
+                if PENANG_UPLOAD_MODEL_FILE.exists():
+                    self.upload_target_scaler = StandardScaler().fit(df.loc[train_mask, [UPLOAD_TARGET]])
+                    self.upload_model = tf.keras.models.load_model(PENANG_UPLOAD_MODEL_FILE)
+            except Exception:
+                self.upload_model = None
         except Exception as e:
             self._error = str(e)
 
-    def predict(self, observations: List[dict]) -> float:
+    def predict(self, observations: List[dict]) -> dict:
         self.load()
         if self._error:
             raise HTTPException(status_code=503, detail=f"Penang LSTM unavailable: {self._error}")
@@ -352,8 +365,16 @@ class _PenangLSTMService:
             raise HTTPException(status_code=400, detail=f"Missing features: {missing}")
         scaled = self.feature_scaler.transform(frame[self.features])
         sequence = scaled.reshape(1, LOOKBACK_PENANG, len(self.features)).astype(np.float32)
-        pred_scaled = self.model.predict(sequence, verbose=0)
-        return float(self.target_scaler.inverse_transform(pred_scaled)[0, 0])
+        download = float(self.target_scaler.inverse_transform(
+            self.model.predict(sequence, verbose=0))[0, 0])
+        upload = None
+        if self.upload_model is not None and self.upload_target_scaler is not None:
+            try:
+                upload = float(self.upload_target_scaler.inverse_transform(
+                    self.upload_model.predict(sequence, verbose=0))[0, 0])
+            except Exception:
+                upload = None
+        return {"download": download, "upload": upload}
 
 
 _penang_lstm = _PenangLSTMService()
@@ -402,7 +423,8 @@ def sample_request_penang():
     obs = [{k: float(v) for k, v in row.items()}
           for row in g.iloc[:-1][_penang_lstm.features].to_dict(orient="records")]
     return {"quadkey": qk, "observations": obs,
-            "actual_next_avg_d_kbps": round(float(g.iloc[-1][TARGET_PENANG]))}
+            "actual_next_avg_d_kbps": round(float(g.iloc[-1][TARGET_PENANG])),
+            "actual_next_avg_u_kbps": round(float(g.iloc[-1][UPLOAD_TARGET]))}
 
 
 @app.post("/predict-penang-network")
@@ -412,13 +434,18 @@ def predict_penang_network(request: PenangPredictionRequest):
     no transfer-learning caveat needed (contrast with /predict-rsrp)."""
     start = time.perf_counter()
     records = [o.model_dump() for o in request.observations]
-    prediction = _penang_lstm.predict(records)
-    return {
-        "predicted_avg_d_kbps": round(prediction),
-        "predicted_mbps": round(prediction / 1000, 1),
+    result = _penang_lstm.predict(records)
+    download, upload = result["download"], result["upload"]
+    payload = {
+        "predicted_avg_d_kbps": round(download),
+        "predicted_mbps": round(download / 1000, 1),
         "model_version": PENANG_MODEL_VERSION,
         "response_time_ms": round((time.perf_counter() - start) * 1000, 2),
         "note": "Real Penang tile data (Ookla Open Data, quarterly, Q1 2019-Q2 2026). "
-                "Predicts next-quarter average mobile download throughput from the "
-                "tile's last 4 quarters of real measurements.",
+                "Predicts next-quarter average mobile download & upload throughput from "
+                "the tile's last 4 quarters of real measurements.",
     }
+    if upload is not None:
+        payload["predicted_avg_u_kbps"] = round(upload)
+        payload["predicted_upload_mbps"] = round(upload / 1000, 1)
+    return payload
