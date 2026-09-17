@@ -308,6 +308,20 @@ PENANG_MODEL_FILE = Path(__file__).resolve().parent.parent / "ml" / "lstm_penang
 PENANG_MODEL_VERSION = "LSTM-PENANG-NETWORK-1.0"
 UPLOAD_TARGET = "avg_u_kbps"
 PENANG_UPLOAD_MODEL_FILE = Path(__file__).resolve().parent.parent / "ml" / "lstm_penang_upload_model.keras"
+PENANG_DATA_FILE = APP_DIR / "data" / "ookla_penang" / "penang_quarterly.csv"
+
+
+def _penang_latest_quarter() -> tuple:
+    """(year, quarter) of the most recent quarter in the raw Ookla data —
+    used to label the genuine forward forecast (the quarter AFTER this one)."""
+    raw = pd.read_csv(PENANG_DATA_FILE, usecols=["year", "quarter"])
+    ymax = int(raw["year"].max())
+    qmax = int(raw.loc[raw["year"] == ymax, "quarter"].max())
+    return ymax, qmax
+
+
+def _next_quarter(year: int, quarter: int) -> tuple:
+    return (year + 1, 1) if quarter == 4 else (year, quarter + 1)
 
 
 class _PenangLSTMService:
@@ -444,6 +458,51 @@ def predict_penang_network(request: PenangPredictionRequest):
         "note": "Real Penang tile data (Ookla Open Data, quarterly, Q1 2019-Q2 2026). "
                 "Predicts next-quarter average mobile download & upload throughput from "
                 "the tile's last 4 quarters of real measurements.",
+    }
+    if upload is not None:
+        payload["predicted_avg_u_kbps"] = round(upload)
+        payload["predicted_upload_mbps"] = round(upload / 1000, 1)
+    return payload
+
+
+@app.get("/forecast-penang-next")
+def forecast_penang_next():
+    """GENUINE forward forecast (not a backtest): predicts the NEXT, not-yet-
+    measured quarter (e.g. Q3 2026) for a representative Penang tile from its
+    last 4 REAL quarters. Unlike /predict-penang-network's demo tile there is
+    NO 'actual' — this quarter hasn't happened yet. Same validated 1-step
+    horizon (4 real quarters in -> next quarter out); shows the model as a
+    forward planning tool, not just a proof-of-accuracy backtest."""
+    _penang_lstm.load()
+    if _penang_lstm._error:
+        raise HTTPException(status_code=503, detail=f"Penang LSTM unavailable: {_penang_lstm._error}")
+    df = _penang_lstm.df
+    counts = df.groupby("quadkey").size()
+    eligible = counts[counts >= LOOKBACK_PENANG].index
+    if len(eligible) == 0:
+        raise HTTPException(status_code=500, detail="No Penang tile has enough quarterly history.")
+    # Same well-observed tile the backtest demo picks (busiest by mean test
+    # volume) so the two tell one coherent story about the SAME tile.
+    busiest = (df[df["quadkey"].isin(eligible)]
+              .groupby("quadkey")["tests"].mean().idxmax())
+    qk = str(busiest)
+    g = df[df["quadkey"] == qk].sort_values("q_index").tail(LOOKBACK_PENANG)
+    obs = [{k: float(v) for k, v in row.items()}
+          for row in g[_penang_lstm.features].to_dict(orient="records")]
+    result = _penang_lstm.predict(obs)
+    download, upload = result["download"], result["upload"]
+    ymax, qmax = _penang_latest_quarter()
+    fy, fq = _next_quarter(ymax, qmax)
+    payload = {
+        "quadkey": qk,
+        "forecast_quarter": f"Q{fq} {fy}",
+        "from_through": f"Q{qmax} {ymax}",
+        "predicted_avg_d_kbps": round(download),
+        "predicted_mbps": round(download / 1000, 1),
+        "model_version": PENANG_MODEL_VERSION,
+        "note": "Genuine forward forecast — this quarter has not been measured yet, so there is "
+                "no 'actual' to compare against. 1-step-ahead (4 real quarters in -> next quarter "
+                "out), the exact horizon the model was validated on.",
     }
     if upload is not None:
         payload["predicted_avg_u_kbps"] = round(upload)

@@ -1280,10 +1280,42 @@ with panel_col:
                     f'{_dl_line}{_ul_line}'
                     f'<div style="color:#8b96a5;font-size:.78rem;margin-top:4px">'
                     f'tile {sample["quadkey"]} · {r["response_time_ms"]:.0f} ms · {r["model_version"]}</div>'
-                    f'<div style="margin-top:6px;color:#5b6472;font-size:.68rem;font-style:italic">'
+                    f'<div style="margin-top:6px;color:#8b96a5;font-size:.85rem;line-height:1.5;font-style:italic">'
                     f'{r["note"]}</div></div>',
                     unsafe_allow_html=True,
                 )
+                # Genuine FORWARD forecast for the same tile — the next quarter
+                # that hasn't been measured yet (no "actual"). Its own try/except
+                # so an older API without this endpoint silently shows nothing
+                # and can NEVER disturb the backtest result rendered above.
+                try:
+                    fc = requests.get(f"{base}/forecast-penang-next", timeout=60).json()
+                    _fdl = fc.get("predicted_mbps")
+                    if _fdl is not None:
+                        _ful = fc.get("predicted_upload_mbps")
+                        _ful_line = (
+                            f'<div style="margin-top:2px">'
+                            f'<span style="color:#f1f4f8;font-size:1.2rem;font-weight:700">{_ful} Mbps</span>'
+                            f'&nbsp;<span style="color:#29b6f6">● forecast upload</span></div>'
+                            if _ful is not None else "")
+                        st.markdown(
+                            f'<div style="margin-top:10px;padding:8px 11px;border:1px solid #2a3441;'
+                            f'border-radius:8px;background:#141a22">'
+                            f'<div style="color:#ffca28;font-size:.72rem;font-weight:600">'
+                            f'Next quarter · {fc["forecast_quarter"]} '
+                            f'<span style="color:#8b96a5;font-weight:400">(not yet measured — no actual)</span></div>'
+                            f'<div style="margin-top:4px">'
+                            f'<span style="color:#f1f4f8;font-size:1.2rem;font-weight:700">{_fdl} Mbps</span>'
+                            f'&nbsp;<span style="color:#00e676">● forecast download</span></div>'
+                            f'{_ful_line}'
+                            f'<div style="color:#8b96a5;font-size:.68rem;margin-top:3px">'
+                            f'a true forward-looking estimate for the same tile — this quarter '
+                            f'hasn’t happened yet, so there is no measured value to compare against. '
+                            f'1-step-ahead, the horizon the model was validated on.</div></div>',
+                            unsafe_allow_html=True,
+                        )
+                except Exception:
+                    pass
             except Exception:
                 st.warning(
                     "The LSTM prediction service isn't responding yet — it may still be "
