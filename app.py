@@ -996,6 +996,23 @@ with map_col:
         m.fit_bounds([[float(fdf["lat"].min()) - _pad, float(fdf["lon"].min()) - _pad],
                       [float(fdf["lat"].max()) + _pad, float(fdf["lon"].max()) + _pad]])
 
+    # UX: don't hijack the page scroll. Scroll-wheel zoom stays DISABLED until the
+    # user clicks the map once (then it zooms); it turns off again when the pointer
+    # leaves the map. So scrolling the page over the map just scrolls the page —
+    # the map only zooms after a deliberate click. (Leaflet-native, via a small
+    # macro that references this map's JS object by name.)
+    from branca.element import MacroElement as _MacroElement, Template as _Template
+    _scroll_gate = _MacroElement()
+    _scroll_gate._template = _Template(
+        "{% macro script(this, kwargs) %}\n"
+        "    var _m = {{ this._parent.get_name() }};\n"
+        "    _m.scrollWheelZoom.disable();\n"
+        "    _m.on('click', function () { _m.scrollWheelZoom.enable(); });\n"
+        "    _m.on('mouseout', function () { _m.scrollWheelZoom.disable(); });\n"
+        "{% endmacro %}"
+    )
+    m.add_child(_scroll_gate)
+
     with st.spinner("Updating map…"):
         # Height chosen so the whole map + its bottom-right Network Legend fit a
         # typical laptop / 1080p viewport without scrolling (header + KPI row take
@@ -1261,7 +1278,7 @@ with panel_col:
                     r = resp.json()
                 _ad = sample.get("actual_next_avg_d_kbps")
                 _au = sample.get("actual_next_avg_u_kbps")
-                _dl_actual = (f' <span style="color:#8b96a5">(actual {_ad/1000:.1f})</span>' if _ad else "")
+                _dl_actual = (f' <span style="color:#8b96a5">(actual {_ad/1000:.1f} Mbps)</span>' if _ad else "")
                 _dl_line = (f'<div style="margin-top:2px">'
                             f'<span style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
                             f'{r["predicted_mbps"]} Mbps</span>&nbsp;'
@@ -1270,7 +1287,7 @@ with panel_col:
                 _ul_line = ""
                 _up_mbps = r.get("predicted_upload_mbps")
                 if _up_mbps is not None:
-                    _ul_actual = (f' <span style="color:#8b96a5">(actual {_au/1000:.1f})</span>' if _au else "")
+                    _ul_actual = (f' <span style="color:#8b96a5">(actual {_au/1000:.1f} Mbps)</span>' if _au else "")
                     _ul_line = (f'<div style="margin-top:2px">'
                                 f'<span style="color:#f1f4f8;font-size:1.3rem;font-weight:700">'
                                 f'{_up_mbps} Mbps</span>&nbsp;'
